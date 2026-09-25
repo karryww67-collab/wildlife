@@ -25,14 +25,14 @@
                               ▼
               backend（Spring Boot :8085）──────────▶ MySQL 8（wildlife_db）
                     │        ▲
-      LPUSH 任务     │        │      消费结果
+      RPUSH 任务     │        │      消费结果
                     ▼        │
         Redis db9  wildlife:tasks        wildlife:results
                     │                        ▲
                     ▼                        │
         ai-engine（FastAPI :8001）── YOLO 推理 ──┘
                     │
-        共享卷 /shared-data（原图 + 缩略图 + 标注图）
+        共享卷 /shared-data（仅保存上传的原图）
 ```
 
 **为什么用队列解耦**：Web 层只负责"收图 + 建任务 + 入队"，推理层按自己的节奏消费。上传 200 张图时 HTTP 请求立即返回，推理在后台跑，进度通过 WebSocket 实时推给前端。
@@ -43,10 +43,10 @@
 
 | 模块 | 说明 | 状态 |
 |---|---|---|
-| **批量上传** | 拖拽多选上传，单次 ≤200 张、单文件 ≤50MB；秒传去重（同 md5 复用物理文件） | ✅ |
+| **批量上传** | 拖拽多选上传，单次 ≤200 张、单文件 ≤50MB；**前端**按「文件名+大小+修改时间」去重（服务端不做内容级去重） | ✅ |
 | **队列调度** | 任务入 Redis 队列，AI 引擎异步消费；支持取消/重试，重试幂等（同一任务重复入队只产出一份结果） | ✅ |
 | **目标检测** | YOLO 检测，输出类别 + 置信度 + 归一化框坐标 | ✅ |
-| **结果存储** | 一条检测框一行记录（`detection_result`），含原图/缩略图/标注图路径 | ✅ |
+| **结果存储** | 一条检测框一行记录（`detection_result`）；图像物理路径在 `recognition_image.file_path`，本系统不生成缩略图与标注图 | ✅ |
 | **结果检索** | 按任务、图像、物种类别、置信度下限、复核状态、**检出时间区间**筛选，分页；筛选口径与 CSV 导出完全一致 | ✅ |
 | **人工复核** | 低置信度结果进入待复核列表，可确认/修正/驳回，支持批量复核；复核结论独立留存不被重跑覆盖 | ✅ |
 | **统计报表** | 物种分布、保护级别/IUCN 分布、置信度分布、检测趋势、任务状态统计（ECharts） | ✅ |
@@ -85,7 +85,7 @@ wildlife/
 │   │                           batch_processor / result_callback
 │   ├── app/api/health.py       健康检查
 │   ├── config/                 模型与检测配置
-│   ├── data/                   共享卷（原图、缩略图、标注图）
+│   ├── data/                   共享卷（仅保存上传的原图）
 │   └── models/                 权重目录（按版本分子目录）
 ├── frontend/                   Vue 3 前端
 │   ├── src/api/index.ts        全部接口封装（含 token 注入）
@@ -142,7 +142,7 @@ cd frontend && npm install && npm run dev
 | `users` | 用户账号与角色 |
 | `model_version` | 模型版本登记（含 `class_config` 类别清单、指标） |
 | `recognition_task` | 批量识别任务（状态、进度、计数） |
-| `recognition_image` | 任务内每张图像（状态、物理文件路径、md5） |
+| `recognition_image` | 任务内每张图像（状态、物理文件路径、文件大小；**无内容指纹列**） |
 | `detection_result` | 检测框结果（类别、置信度、坐标、复核状态） |
 | `review_record` | 复核操作留痕（操作人、动作、修正前后类别） |
 
@@ -267,6 +267,7 @@ docker exec wildlife-ai-engine python check_weights.py --all
 4. **REVIEWER 角色实际退化为 USER**。`AuthService.normalizeRole()` 只归一出 `ADMIN` 与 `USER` 两种角色，库里存的 `REVIEWER` 会被降为 `USER`。用户管理页仍可创建 REVIEWER 账号，但该账号的实际权限与只读用户完全相同。要让它真正生效，需先改归一化逻辑，再把「提交复核结论」之类的动作单独收口。
 5. **上传内容未做图像校验**。`POST /api/images/upload` 只校验扩展名与文件大小，实测一个 2 MB 的全零文件（命名为 `.jpg`）也能入库为 WAITING 状态。不会导致崩溃，但会给库引入无效图像；要收紧需加魔数/解码校验。
 6. **`model_version.class_config` 曾与版本目录的 `classes.txt` 不一致**（**已修复**）。原先是 6 个英文名（`["deer","tiger","elephant","monkey","bear","fox"]`），现已对齐为 `models/wildlife-v1.0/classes.txt` 里的 20 个中文物种名。对齐前 `GET /api/results/classes?usedOnly=false` 返回 11 类，对齐后返回 25 类（20 个声明物种 ∪ 6 个实际检出，其中「野猪」重合）；`usedOnly=true` 始终是实际检出的 6 类，未受影响。库内值经 md5 逐字节比对确认与 `classes.txt` 一致。
+    **补充（同日发现并修复）**：该对齐当时**只改了运行库，未同步 `docker/mysql/init.sql` 的种子值** —— 意味着执行 `docker compose down -v` 重建后，`class_config` 会静默退回 6 个英文名，而本文档却写着"已修复"。现已把种子值同步为同样的 20 个中文物种名（紧凑 JSON，逗号后无空格），并**实测验证**：全新 MySQL 8.0 容器 + 空数据卷跑 `init.sql`，得到 `md5(class_config) = cd8cc1b44c52bb911c13dfa672cb9384`、220 字节、20 类，与运行库逐字节一致。同时给 `init.sql` 加了 `SET NAMES utf8mb4`（否则客户端字符集可能把中文种子值写坏且不报错）。
 7. **识别结果与 `BATCH_SIZE` 绑定**。ultralytics 会按批内最大尺寸补齐张量，同一张图在不同批次里重采样比例不同，因此置信度与框会有小幅差异（实测置信度差 ≤ 0.08、框坐标差 ≤ 4px，最高分类别不变，偶发多出/少掉一个低分框）。这是 ultralytics 的固有行为，不是本系统缺陷；报告指标或做前后对比时应固定 `BATCH_SIZE`。详见第八节 8.5。
 
 > 2026-09-25 已修复（其中两项原先列在此处）：

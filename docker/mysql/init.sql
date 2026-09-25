@@ -38,6 +38,13 @@ COLLATE utf8mb4_unicode_ci;
 
 USE wildlife_db;
 
+-- ⚠️ 必须显式声明连接字符集。
+--    下面 model_version 的种子数据里含中文类别名，而本文件是由 mysql 客户端
+--    以「客户端默认字符集」执行的：客户端charset 若不是 utf8mb4，中文会在
+--    导入阶段就被写坏，且不报任何错 —— 表现为前端「人工审核」下拉框里全是乱码。
+--    MySQL 8 客户端默认已是 utf8mb4，这里显式钉死以免依赖环境默认值。
+SET NAMES utf8mb4;
+
 
 -- ============================================================================
 -- 0. 清理历史表
@@ -319,6 +326,14 @@ ON DUPLICATE KEY UPDATE username = username;
 -- ⚠️ class_config 供前端「人工审核」下拉框使用（见 api/index.ts 的
 --    parseClassConfig），只支持两种写法：JSON 数组，或逗号/换行分隔的纯文本。
 --    写成 {"0":"deer",...} 这类对象会被当成普通字符串按逗号切开，渲染出残片。
+-- ⚠️ class_config 必须与 ai-engine/models/wildlife-v1.0/classes.txt **逐字节一致**，
+--    否则前端「人工审核」下拉框与识别服务返回的类别名对不上。
+--    当前值 = classes.txt 的 20 个中文物种名，紧凑 JSON（逗号后无空格）：
+--      md5(class_config) = cd8cc1b44c52bb911c13dfa672cb9384   (UTF-8, 220 bytes)
+--    改动时请用同一口径校验：
+--      python -c "import json,hashlib;n=[l.strip() for l in open('classes.txt',encoding='utf-8') if l.strip()];print(hashlib.md5(json.dumps(n,ensure_ascii=False,separators=(',',':')).encode()).hexdigest())"
+--    ⚠️ 注意 separators —— json.dumps 默认会在逗号后加空格，那样 md5 会变
+--       （1ada8ea2cf3d20dfb337622d61ccbc08），虽不影响 JSON 语义，但会与本注释不符。
 -- ⚠️ status 用 ENABLED / DISABLED（ModelService / ModelController / 前端
 --    ModelStatus 三处都按这两个词判定），首个模型建库时直接置 ENABLED。
 -- =========================================================
@@ -336,7 +351,7 @@ VALUES
     'Wildlife YOLO',
     'wildlife-v1.0',
     '/models/wildlife-v1.0/best.pt',
-    '["deer","tiger","elephant","monkey","bear","fox"]',
+    '["大熊猫","雪豹","川金丝猴","羚牛","小熊猫","豹猫","野猪","小麂","毛冠鹿","中华鬣羚","斑羚","赤麂","果子狸","猪獾","黄喉貂","猕猴","白鹇","红腹角雉","血雉","绿尾虹雉"]',
     'ENABLED'
 )
 ON DUPLICATE KEY UPDATE
