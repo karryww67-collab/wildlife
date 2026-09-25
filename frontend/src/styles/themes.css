@@ -1,0 +1,223 @@
+/* ============================================================================
+ * 主题变量表（全部为薄荷绿系的浅色主题，无深色主题）
+ *
+ *   1) forest  —— 薄荷绿森林（默认）：偏深、偏沉，苔绿/林绿，适合长时间看数据
+ *   2) cartoon —— 卡通动物：明亮通透的春绿 + 天空蓝/蜜桃黄点缀，呼应登录页插画
+ *
+ * 约定：
+ *   - 两套主题各 77 个变量，名字完全对称 → 改一个主题必须同步改另一个，
+ *     否则会静默回落到 :root（forest）的值，出现"半套主题"。
+ *   - 品牌识别色 #98FF98 只用于大面积装饰；承担交互（按钮/链接/进度/激活态）
+ *     的是各主题的 --color-primary（比品牌绿深两档，保证白字可读）。
+ *   - 全站页面底色实际来自 --bg-admin-page（8 个视图根容器都用它），
+ *     改主题时它比 --bg-primary 更关键。
+ * ============================================================================ */
+
+/* ── 全局过渡 ── */
+html {
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+html * {
+  transition: background-color 0.4s ease, color 0.3s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+/* ── 主题 1：薄荷绿森林（默认） ── */
+:root,
+[data-theme="forest"] {
+  /* 背景 */
+  --bg-primary: #EEF7F1;
+  --bg-header-start: #FFFFFF;
+  --bg-header-end: #E7F3EC;
+  --bg-panel: rgba(255, 255, 255, 0.88);
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F3FAF5;
+  --bg-card-active: #D9F0E2;
+  --bg-track: #D6E7DC;
+  --bg-nav-start: #FFFFFF;
+  --bg-nav-end: #E7F3EC;
+  --bg-badge-danger: rgba(190, 84, 74, 0.10);
+  --bg-badge-warning: rgba(190, 140, 50, 0.12);
+  --bg-badge-success: rgba(30, 122, 82, 0.12);
+  --bg-badge-purple: rgba(110, 95, 175, 0.12);
+  --bg-badge-danger-alt: rgba(190, 84, 74, 0.16);
+  --bg-event-item: #F3FAF5;
+  --bg-event-danger: rgba(190, 84, 74, 0.06);
+  --bg-event-warning: rgba(190, 140, 50, 0.07);
+  --bg-liability-item: rgba(30, 122, 82, 0.05);
+
+  /* 边框 */
+  --border-primary: #D5E7DC;
+  --border-light: rgba(30, 122, 82, 0.15);
+  --border-subtle: rgba(213, 231, 220, 0.8);
+  --border-accent: rgba(30, 122, 82, 0.38);
+  --border-danger: rgba(190, 84, 74, 0.28);
+  --border-purple: rgba(110, 95, 175, 0.28);
+  --border-divider: #E4F0E9;
+
+  /* 强调色 */
+  --color-primary: #1E7A52;
+  --color-primary-glow: rgba(30, 122, 82, 0.45);
+  --color-primary-soft: rgba(30, 122, 82, 0.28);
+  --color-purple: #6E5FAF;
+  --color-danger: #BE544A;
+  --color-warning: #BE8C32;
+  --color-success: #1E7A52;
+  --color-collision: #B84A6B;
+  --color-still: #7E5A9C;
+  --color-online: #1E7A52;
+  --color-offline: #93AC9F;
+  --color-nav-active-bg: #D9F0E2;
+  --color-nav-active-text: #176044;
+  --color-ws-dot-off: #B2C5B8;
+  --color-party-orange: #BE7331;
+  --color-task-hash: #22747A;
+
+  /* 文字 */
+  --text-primary: #12342A;
+  --text-secondary: #35594A;
+  --text-muted: #63836F;
+  --text-dim: #93AC9F;
+  --text-dark: #7C9C8D;
+  --text-danger: #A03A2E;
+  --text-warning: #8F620F;
+  --text-purple: #55438F;
+  --text-white: #FFFFFF;
+
+  /* 阴影 */
+  --shadow-panel: 0 2px 16px rgba(16, 72, 48, 0.08);
+  --shadow-glow: none;
+
+  /* 扫描线（浅色主题下隐藏） */
+  --scan-line-color: transparent;
+
+  /* 标题渐变 */
+  --title-gradient-from: #1E7A52;
+  --title-gradient-via: #3E9E74;
+  --title-gradient-to: #176044;
+
+  /* 面板标题下划线 */
+  --panel-title-border: #CDE3D6;
+
+  /* 后台管理（--bg-admin-page 即全站底色） */
+  --bg-admin-page: #EEF7F1;
+  --bg-admin-card: #FFFFFF;
+  --bg-admin-input: #F3FAF5;
+  --bg-admin-input-alt: #FFFFFF;
+  --border-admin-input: #BFD8C7;
+  --border-admin-table: #D5E7DC;
+  --color-admin-focus: #1E7A52;
+
+  /* 图表色板（canvas 不认 var()，由 StatisticsChart 读出后注入） */
+  --chart-1: #1E7A52;
+  --chart-2: #4AA57C;
+  --chart-3: #2F86B0;
+  --chart-4: #6E5FAF;
+  --chart-5: #BE8C32;
+  --chart-6: #BE544A;
+  --chart-7: #79C79B;
+  --chart-8: #4F9C63;
+  --chart-9: #3B8A9C;
+  --chart-10: #9470B0;
+  --chart-11: #AD9130;
+  --chart-12: #B76A78;
+}
+
+/* ── 主题 2：卡通动物 ── */
+[data-theme="cartoon"] {
+  /* 背景 */
+  --bg-primary: #F1FDF7;
+  --bg-header-start: #FFFFFF;
+  --bg-header-end: #E6FCF0;
+  --bg-panel: rgba(255, 255, 255, 0.9);
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F2FDF7;
+  --bg-card-active: #D6F8E6;
+  --bg-track: #D3EFE1;
+  --bg-nav-start: #FFFFFF;
+  --bg-nav-end: #E6FCF0;
+  --bg-badge-danger: rgba(255, 107, 107, 0.14);
+  --bg-badge-warning: rgba(255, 178, 60, 0.16);
+  --bg-badge-success: rgba(47, 191, 124, 0.14);
+  --bg-badge-purple: rgba(167, 139, 250, 0.16);
+  --bg-badge-danger-alt: rgba(255, 107, 107, 0.2);
+  --bg-event-item: #F2FDF7;
+  --bg-event-danger: rgba(255, 107, 107, 0.07);
+  --bg-event-warning: rgba(255, 178, 60, 0.09);
+  --bg-liability-item: rgba(47, 191, 124, 0.06);
+
+  /* 边框 */
+  --border-primary: #D3EFE1;
+  --border-light: rgba(47, 191, 124, 0.18);
+  --border-subtle: rgba(211, 239, 225, 0.85);
+  --border-accent: rgba(47, 191, 124, 0.42);
+  --border-danger: rgba(255, 107, 107, 0.32);
+  --border-purple: rgba(167, 139, 250, 0.32);
+  --border-divider: #E7F9EF;
+
+  /* 强调色 */
+  --color-primary: #2FBF7C;
+  --color-primary-glow: rgba(47, 191, 124, 0.5);
+  --color-primary-soft: rgba(47, 191, 124, 0.3);
+  --color-purple: #A78BFA;
+  --color-danger: #FF6B6B;
+  --color-warning: #FFB23C;
+  --color-success: #2FBF7C;
+  --color-collision: #FF7BA9;
+  --color-still: #B98BE8;
+  --color-online: #2FBF7C;
+  --color-offline: #A8C6B8;
+  --color-nav-active-bg: #D6F8E6;
+  --color-nav-active-text: #178A52;
+  --color-ws-dot-off: #C1D5CB;
+  --color-party-orange: #FF9152;
+  --color-task-hash: #3BB8C4;
+
+  /* 文字 */
+  --text-primary: #173D2C;
+  --text-secondary: #3D6B55;
+  --text-muted: #6E9382;
+  --text-dim: #9FBDB0;
+  --text-dark: #8BAF9F;
+  --text-danger: #D64545;
+  --text-warning: #C07C12;
+  --text-purple: #7455C9;
+  --text-white: #FFFFFF;
+
+  /* 阴影 */
+  --shadow-panel: 0 4px 18px rgba(24, 104, 68, 0.09);
+  --shadow-glow: none;
+
+  /* 扫描线（浅色主题下隐藏） */
+  --scan-line-color: transparent;
+
+  /* 标题渐变：绿 → 天空蓝 → 蜜桃黄，做出卡通插画感 */
+  --title-gradient-from: #2FBF7C;
+  --title-gradient-via: #4EC5E8;
+  --title-gradient-to: #FFB23C;
+
+  /* 面板标题下划线 */
+  --panel-title-border: #CFF0DF;
+
+  /* 后台管理（--bg-admin-page 即全站底色） */
+  --bg-admin-page: #F1FDF7;
+  --bg-admin-card: #FFFFFF;
+  --bg-admin-input: #F2FDF7;
+  --bg-admin-input-alt: #FFFFFF;
+  --border-admin-input: #BCE8D0;
+  --border-admin-table: #D3EFE1;
+  --color-admin-focus: #2FBF7C;
+
+  /* 图表色板 */
+  --chart-1: #2FBF7C;
+  --chart-2: #4EC5E8;
+  --chart-3: #FFB23C;
+  --chart-4: #FF7BA9;
+  --chart-5: #A78BFA;
+  --chart-6: #7BE0AD;
+  --chart-7: #FF9152;
+  --chart-8: #5AB8E8;
+  --chart-9: #C9A227;
+  --chart-10: #E86A9B;
+  --chart-11: #56C596;
+  --chart-12: #9B8BE0;
+}

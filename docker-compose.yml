@@ -1,0 +1,184 @@
+# ============================================================================
+# 野生动物图像批量识别系统 —— Docker 编排
+#
+# 服务（5 个）：mysql / redis / backend / ai-engine / frontend
+#
+# 识别主链路（backend 与 ai-engine 靠 Redis 队列完全解耦，不互相调 HTTP）：
+#
+#   frontend ──/api──▶ backend ──rpush wildlife:tasks──▶ Redis ──blpop──▶ ai-engine
+#                        ▲                                                  │
+#                        └──────────── wildlife:results ◀──────────────────┘
+#
+#   backend 只负责「投递任务」与「消费结果」，ai-engine 只负责「消费任务」
+#   与「回传结果」，两者之间没有任何直接依赖，因此 backend **不** depends_on
+#   ai-engine，双方都只依赖 redis。
+#
+# 图像文件不走网络：backend 把上传的图落盘到 /shared-data/originals，
+#   ai-engine 挂载同一宿主目录（./ai-engine/data）按绝对路径直读原图。
+#
+# 启动：docker compose up -d --build
+# ⚠️ mysql 只在 mysql_data 卷为空时执行 ./docker/mysql/init.sql 建库建表；
+#    改过建表语句要让其生效，必须先 docker compose down -v（会清空数据）。
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # MySQL —— 业务库 wildlife_db，首次启动自动执行 init.sql 建表
+  # --------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: wildlife-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: wildlife_db
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # --------------------------------------------------------------------------
+  # Redis —— 识别链路的唯一枢纽（db 9，与 backend 的 spring.data.redis.database 一致）
+  #   wildlife:tasks    backend 投递 → ai-engine 消费
+  #   wildlife:results  ai-engine 投递 → backend 消费
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: wildlife-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # --------------------------------------------------------------------------
+  # Spring Boot 后端 —— 业务 API + WebSocket 推送 + 任务投递 + 结果落库
+  #   只依赖 mysql 与 redis；不直连 ai-engine
+  # --------------------------------------------------------------------------
+  backend:
+    build: ./backend
+    image: wildlife-backend:latest
+    container_name: wildlife-backend
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/wildlife_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DATABASE: 9
+      # 对应 application.yml 的 app.image.storage-path（ImageService 读的正是这个键）
+      APP_IMAGE_STORAGE_PATH: /shared-data/originals
+      TZ: Asia/Shanghai
+    ports:
+      - "8085:8085"
+    volumes:
+      # 上传图像落盘于此，ai-engine 挂载同一目录直读原图
+      - ./ai-engine/data:/shared-data
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # FastAPI + YOLO AI 引擎 —— 消费任务队列、批量推理、回传结果
+  #   只依赖 redis；模型权重由只读挂载提供（不进镜像）
+  # --------------------------------------------------------------------------
+  ai-engine:
+    build: ./ai-engine
+    image: wildlife-ai-engine:latest
+    container_name: wildlife-ai-engine
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DATABASE: 9
+      # 队列名须与 backend 的 TaskService.TASK_QUEUE_KEY /
+      # RedisSubscriberService.RESULT_QUEUE_KEY 保持一致
+      TASK_QUEUE_KEY: "wildlife:tasks"
+      RESULT_QUEUE_KEY: "wildlife:results"
+      # 消费者线程数（每线程独立模型实例）与单批推理张数
+      #
+      # ── CPU 推理设置 ──────────────────────────────────────────────────────
+      # 本机与部署环境都没有 GPU（torch 为 CPU 版），故设备显式写死为 cpu，
+      # 不依赖 ultralytics 的自动判定 —— 换台机器部署行为也一致。
+      YOLO_DEVICE: cpu
+      # 单次送入 YOLO 的图像张数。这是**真正的批推理**：detect_batch 会把整个
+      # 列表交给 model.predict，而不是逐张循环；批内先整块读图再一次性推理，
+      # 所以这个值同时决定峰值内存与单批延迟。
+      # CPU 上每张 640×640 图像解码 + 预处理后约数 MB，加上模型中间激活，
+      # 8 张是偏保守的取值；内存吃紧就调小，机器富余可调大。
+      BATCH_SIZE: 8
+      # 消费线程数：每个线程持有**独立模型实例**（独立权重副本）。
+      # CPU 部署建议保持 1 —— 核心已被单次批推理用满，多线程不会提速，
+      # 只会成倍占用内存并相互抢核。
+      RECOGNITION_WORKERS: 1
+      # 可选：限制 torch 使用的 CPU 线程数。不设 = torch 用满所有核心。
+      # 若这台机器同时跑 MySQL/Redis/后端，可设为物理核数的一半左右，
+      # 避免推理占满 CPU 让其它容器响应变慢（表现为"一识别页面就卡"，
+      # 而日志里没有任何错误）。
+      # YOLO_CPU_THREADS: 4
+      # 模型目录与版本，对应 docker/mysql/init.sql 里 model_version.model_path
+      # 说明：wildlife-v1.0/v1.1/v2.0 三个正式版本目录当前只有 classes.txt/meta.json，
+      # 尚无真正训练的权重；临时启用 test-coco-yolo11n（COCO yolo11n 公开权重）用于
+      # 打通链路与联调。真正训练出的 best.pt 就位后，请把下面两行改回对应版本。
+      MODEL_ROOT: /models
+      ACTIVE_MODEL_VERSION: test-coco-yolo11n
+      YOLO_MODEL_PATH: /models/test-coco-yolo11n/best.pt
+      YOLO_IMAGE_SIZE: 640
+      TZ: Asia/Shanghai
+    ports:
+      - "8001:8001"
+    volumes:
+      # 模型权重不进镜像（.dockerignore 排除了 models/），只读挂载
+      - ./ai-engine/models:/models:ro
+      # 与 backend 共享，按路径直读上传的原图
+      - ./ai-engine/data:/shared-data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # 前端 —— nginx 托管静态资源，并把 /api、/ws 反代到 backend
+  # --------------------------------------------------------------------------
+  frontend:
+    build: ./frontend
+    image: wildlife-frontend:latest
+    container_name: wildlife-frontend
+    restart: unless-stopped
+    ports:
+      - "9095:80"
+    depends_on:
+      - backend
+
+# 网络与卷显式命名：本目录名是中文，compose 会把项目名规范化成空字符串，
+# 导致网络名变成 "_default"、卷名变成 "_mysql_data"（下划线开头，Docker 视为非法名）。
+# 显式命名后与目录名彻底解耦。
+networks:
+  default:
+    name: wildlife-net
+
+volumes:
+  mysql_data:
+    name: wildlife-mysql-data
+  redis_data:
+    name: wildlife-redis-data

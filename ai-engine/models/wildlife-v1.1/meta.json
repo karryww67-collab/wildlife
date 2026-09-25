@@ -1,0 +1,21 @@
+{
+  "modelName": "WildlifeDetector",
+  "version": "wildlife-v1.1",
+  "description": "YOLOv8s 微调 v1.1 · 30 类，扩充小型兽类与雉类，加入夜间红外图像训练",
+  "framework": "PyTorch / Ultralytics",
+  "inputSize": 640,
+  "classFile": "classes.txt",
+  "classConfig": "classes.txt",
+  "numClasses": 30,
+  "precisionValue": 0.864,
+  "recallValue": 0.831,
+  "map50": 0.892,
+  "map5095": 0.671,
+  "trainImages": 21360,
+  "valImages": 2670,
+  "epochs": 200,
+  "batchSize": 16,
+  "trainTime": "2026-08-05",
+  "metricsVerified": false,
+  "metricsNote": "上述 precision/recall/mAP 尚无权重与训练日志可佐证：models/wildlife-v1.1/ 下没有 best.pt，也没有可复现的评测记录。跑 ai-engine/scripts/evaluate.py 会在写出真实指标的同时把 metricsVerified 置为 true，并附上权重 md5 与数据集摘要。在此之前，请勿在论文中把这些数字作为实测性能引用。"
+}

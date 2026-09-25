@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.git/
+*.log
+
+# 本地手工备份（本项目非 git 仓库，改文件前留副本），不进构建上下文
+_backup_*/

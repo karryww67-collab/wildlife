@@ -1,0 +1,42 @@
+# Java
+backend/target/
+*.class
+*.jar
+*.war
+
+# Python
+ai-engine/__pycache__/
+ai-engine/**/__pycache__/
+ai-engine/*.pyc
+ai-engine/.env
+ai-engine/data/chroma/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# Data
+# 注意：无前导斜杠的 `data/` 会匹配**任意层级**的 data 目录，
+# 因此 ai-engine/data/（439 张原图，约 145 MB）已被正确忽略。
+data/
+models/*.pt
+
+# 上面这条带中间斜杠，只匹配**根目录**的 models/ ——
+# ai-engine/models/<版本>/best.pt 会逃过它，所以补一条覆盖任意层级。
+ai-engine/models/**/*.pt
+
+# 工作产物与临时脚本（报告、验证脚本、探针文件等）
+.workbuddy/
