@@ -100,6 +100,19 @@ python -c "import torch;print(torch.__version__, torch.version.cuda, torch.cuda.
 # 期望 2.3.x / 12.1 / True；若是 False，别开始训练
 ```
 
+**实测环境**（2026-09-25，本项目实例，选第 2 个镜像）：
+
+```
+NVIDIA-SMI 550.54.15   Driver Version: 550.54.15   CUDA Version: 12.4
+NVIDIA A10   23028MiB (24GB)
+torch 2.3.1+cu121   12.1   True
+```
+
+这也印证了上面的判断：**驱动 550 最高支持 CUDA 12.4，而 CUDA 13 需要驱动 ≥ 580**，
+所以第 1 个镜像（`cuda13.0.3-py312-torch2.13.0`）在这台机器上会
+`is_available() = False` —— 于是你在 CPU 上训练而不自知。
+**挑镜像前先看 `nvidia-smi` 显示的驱动版本上限。**
+
 > ⚠️ **别让 pip 换掉预装的 torch。** `pip install -U ultralytics` 看到 torch 已满足要求
 > 就不会动它；但**不要执行 `pip install -U torch`** —— 那会装上 PyPI 的通用 wheel，
 > 可能破坏与 CUDA 的匹配。装完复查一次上面那条命令。
