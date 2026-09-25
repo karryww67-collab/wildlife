@@ -223,6 +223,29 @@ python prepare_dataset.py --dataset /mnt/workspace/data/wildlife \
   先修数据，别带着问题硬训；
 - 它会指出**零实例类别** —— 那些类别的 mAP 恒为 0，会拉低整体指标。
 
+## 4.5 还没有数据集？先验证链路（约 10 分钟）
+
+正式数据集要到项目后期才到位。**别等数据来了才第一次运行训练脚本** ——
+那时才发现 GPU 路径有问题，代价是几小时额度加一次失败训练。
+
+`smoke_test.py` 用仓库自带的 3 张测试图（`ai-engine/tests/*.jpg`）造一个最小数据集，
+把 `prepare_dataset → train → evaluate` 走一遍：
+
+```bash
+cd /mnt/workspace/wildlife
+python smoke_test.py --keep
+```
+
+它检查 5 项：`prepare_dataset` 通过、`train.py` 的 `--device auto` **解析成 GPU**
+（而不是静默退回 cpu）、`best.pt` 非空、`evaluate.py` 生成 `meta.json`、
+`meta.json` 里 `metricsVerified=true` 且记到了显卡名。结尾打印 PASS/FAIL 汇总。
+
+若 `--device` 那项显示 `cpu` 而机器有显卡，说明 torch 没识别到 GPU ——
+先查 `torch.cuda.is_available()`，别继续。
+
+> ⚠️ 这次跑出来的精度**毫无意义**（3 张图、3 轮、imgsz 320），脚本自己也会提示。
+> 它只验"链路通不通"，不能拿这个 mAP 写论文。
+
 ## 5. 训练
 
 ```bash
