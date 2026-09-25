@@ -143,18 +143,26 @@ GPU 上训出来的 `best.pt` 拿回本地 CPU 容器可以直接加载（就是
 
 ### 3.1 代码：用 git（推荐）
 
-本机已装 git（在 `D:\Git`，不在 PATH，用绝对路径 `D:\Git\cmd\git.exe`）。
-把项目推到一个**私有**仓库（GitHub / Gitee），魔搭这边 clone 即可：
+项目已推到 GitHub（**当前是公开仓库**）：
+`https://github.com/karryww67-collab/wildlife`
 
 ```bash
 cd /mnt/workspace
-git clone https://<token>@github.com/<用户名>/<仓库名>.git wildlife-src
+git clone https://github.com/karryww67-collab/wildlife.git wildlife-src
 
 mkdir -p /mnt/workspace/wildlife && cd /mnt/workspace/wildlife
 cp /mnt/workspace/wildlife-src/ai-engine/scripts/*.py .
 cp /mnt/workspace/wildlife-src/ai-engine/check_weights.py .
 cp /mnt/workspace/wildlife-src/ai-engine/models/wildlife-v1.0/classes.txt .
 ```
+
+> ⚠️ **上面这行 clone 没有 token —— 因为仓库是公开的。**
+> 若日后改成私有，clone 时要认证，**不要把 token 拼进 URL**（会明文存进 `.git/config`），
+> 让它交互提示即可：提示 `Username` 输 `karryww67-collab`，提示 `Password` 输 token
+> （token 不是登录密码；粘贴时终端不显示任何字符，属正常）。
+>
+> 另外：命令里的尖括号 `<...>` 是占位符，**照抄会报
+> `bash: ...: 没有那个文件或目录`** —— bash 会把 `<` 当成重定向。
 
 **为什么值得这么做**：实例关闭后除 `.ipynb` 什么都留不下（见开头），
 所以每次重开实例都要重新准备代码 —— 手工传 6 个文件是**每次**都要做，
@@ -180,10 +188,10 @@ JupyterLab 左侧文件浏览器支持**多选/拖拽上传**，6 个文件合�
 把数据集也放进某个能一键取回的地方（魔搭的数据集仓库支持 git + git-lfs），
 比每次从本机上传快得多。
 
-数据按 YOLO 标准布局：
+数据按 YOLO 标准布局（下面用本文档统一的 `/mnt/workspace/data/` 作数据根）：
 
 ```
-<数据根>/wildlife/
+/mnt/workspace/data/wildlife/
   images/train/*.jpg
   images/val/*.jpg
   labels/train/*.txt      # 与图片同名
