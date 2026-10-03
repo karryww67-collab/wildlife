@@ -40,3 +40,6 @@ ai-engine/models/**/*.pt
 
 # 工作产物与临时脚本（报告、验证脚本、探针文件等）
 .workbuddy/
+
+# 数据集调研的临时下载目录（子代理工作区，含数百 MB 的 LILA 元数据，不入库）
+_lila_audit/

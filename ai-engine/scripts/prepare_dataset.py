@@ -36,6 +36,12 @@ import sys
 from collections import Counter
 from typing import Dict, List, Tuple
 
+# Windows 控制台默认是 GBK，本脚本会打印中文与警号，不改这里会在输出阶段抛
+# UnicodeEncodeError（且往往发生在校验已跑完之后，看起来像"白跑一趟"）。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff")
 
 
