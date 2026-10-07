@@ -241,7 +241,15 @@ docker exec wildlife-ai-engine python check_weights.py --all
 - **部署侧**（本机与 ai-engine 容器）没有可用 GPU（`torch 2.7.1+cpu`，`torch.cuda.is_available()` 为 `False`），推理固定跑 CPU —— 批量控制与实测速度见 8.5。
 - **训练侧**放到有 GPU 的环境做。例如魔搭社区 Notebook（8 核 / 32GB / 24G 显存）：`train.py` 与 `evaluate.py` 的 `--device` / `--batch` 默认都是 `auto`，有 CUDA 就自动用 `0` 并交给 AutoBatch 按显存定批，开训前会打印实际选用的设备、显卡型号与批大小。**完整操作步骤与坑见 [`ai-engine/scripts/魔搭Notebook训练指南.md`](ai-engine/scripts/魔搭Notebook训练指南.md)。**
 
-  > 注意该平台的持久化行为：按魔搭官方开发者钉群的答复，**实例关闭后只有 `.ipynb` 会保留，其它文件与文件夹都不保存** —— 训练产物必须在关闭前取回。
+  > **⚠️ 一条最容易踩的坑：训练数据不要放在 NAS 上读。**
+  > 实测同一份 19,723 张图、同一台 A10：数据在 NAS（`/mnt/data`）上时
+  > **4.8 s/步、100 轮需 ~33 小时**（会耗尽 GPU 额度）；拷到实例本地盘（`/tmp`）后
+  > **0.12 s/步、~2 小时**，提速约 40 倍。**正式训练前必须先把数据拷到 `/tmp`**，
+  > 并把 `data.yaml` 的 `path` 改过去（注意该字段带引号，用 `sed` 改会静默失效）。
+  > 详见训练指南 §0 与《魔搭训练_完整命令.md》块 4.6。
+  >
+  > 另注：魔搭官方答复称「实例关闭后只有 `.ipynb` 会保留」，但本项目**实测**
+  > `/mnt/data`（阿里云 NAS）跨实例保留。保守做法是最终产物既存 `/mnt/data` 也下载回本机。
 
 ### 8.4 数据获取与合并（已跑通）
 

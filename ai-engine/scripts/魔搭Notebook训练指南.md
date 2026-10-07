@@ -43,15 +43,49 @@
 | 代码、临时日志 | `/mnt/workspace/`（不持久，每次重拉） |
 | **数据集、训练产物**、跨实例要保留的东西 | **`/mnt/data/`**（持久） |
 
-> ⚠️ **NAS IO 明显慢于本地盘**。实测在 NAS 上训练时，dataloader 每步要 4-5 秒
-> （本地 SSD 约 0.5-1 秒），**每 epoch 从 ~2 分钟变成 ~20 分钟**。
-> 100 epochs 会从 3-5 小时变成 33 小时 —— **会耗尽 GPU 额度**。
-> **正式长训练前，先把数据集拷到 `/tmp`（本地盘）再训**：
+> ⚠️ **NAS IO 明显慢于本地盘 —— 这是本项目最大的一个速度陷阱。**
+> 实测同一份 19,723 张图、同一台 A10、同一个 batch=32：
+>
+> | 数据位置 | 读取速度 | 每步 | 每 epoch（493 步） | 100 epochs |
+> |---|---|---|---|---|
+> | `/mnt/data`（NAS） | — | 4.8 s | ~20 min | **~33 小时**（超额度，跑不完） |
+> | `/tmp`（本地盘） | **782 MB/s** | **0.12 s**（8.4 it/s） | **~1 分钟** | **~2 小时** ✅ |
+>
+> 提速约 **40 倍**。**正式长训练前必须先把数据集拷到 `/tmp`**：
 >
 > ```bash
-> mkdir -p /tmp/yolo && cp -r /mnt/data/combined/yolo/* /tmp/yolo/
-> sed -i 's|path: .*|path: /tmp/yolo|' /tmp/yolo/data.yaml
+> mkdir -p /tmp/yolo && cp -r /mnt/data/wildlife-combined/yolo/* /tmp/yolo/
 > ```
+>
+> ⚠️ **改 data.yaml 的 path 不要用 sed** —— 里面的 path 是**带引号**的：
+> `path: "/mnt/data/wildlife-combined/yolo"`，
+> 而 `sed 's|path: /mnt/...|...|'` 少了引号、**匹配不上且不报错**，
+> 看起来改了其实没改，训练继续读 NAS —— 白等几小时。用 python：
+>
+> ```bash
+> python - <<'PY'
+> import pathlib
+> p = pathlib.Path("/tmp/yolo/data.yaml")
+> text = p.read_text(encoding="utf-8").replace(
+>     '"/mnt/data/wildlife-combined/yolo"', '"/tmp/yolo"'
+> ).replace("/mnt/data/wildlife-combined/yolo", "/tmp/yolo")
+> p.write_text(text, encoding="utf-8")
+> print(text[:80])
+> PY
+> ```
+>
+> **改完务必 `head -3 /tmp/yolo/data.yaml` 亲眼确认** `path: "/tmp/yolo"`。
+> 提速是否生效，进训练后看 `s/it`：**< 0.2 秒才算走对了盘**。
+>
+> 顺带：数据在本地盘时，dataloader 扫描从 NAS 上的 ~11 分钟变成 **6 秒**，
+> 并在 `labels/` 下生成 `train.cache` / `val.cache`。
+
+### `--workers` 怎么选：看数据在哪
+
+| 数据位置 | `--workers` | 原因 |
+|---|---|---|
+| `/tmp`（本地盘） | **4** | 正常并发预取 |
+| `/mnt/data`（NAS） | **0** | 多 worker 会在 fork 上卡死，训练永远进不了第一个 epoch（实测） |
 
 ### 下载并发：`--workers 64`
 
@@ -60,21 +94,22 @@
 中断后重跑同一命令会自动跳过已下载的图。
 
 ---
+
+## ⚠️ 关于持久化的两点补充（实测与官方答复有出入）
+
+**魔搭官方答复**（发布于 2023-12 与 2024-07，平台行为可能已变）：
+
+> 「关闭实例后，**.ipynb 文件会保存下来，其他文件及文件夹不会被保存**，可以在关闭前下载到本地。」
+> —— [noote过一段时间会关机清理的吗](https://developer.aliyun.com/ask/661773)
 >
-> ## ⚠️ 先记住这一条：实例关闭后，除了 `.ipynb` 什么都不保留
->
-> 魔搭官方开发者钉群的两条答复互相印证：
->
-> > 「关闭实例后，**.ipynb 文件会保存下来，其他文件及文件夹不会被保存**，可以在关闭前下载到本地。」
-> > —— [noote过一段时间会关机清理的吗，ModelScope怎么样长期使用的?](https://developer.aliyun.com/ask/661773)（2024-07）
->
-> > 「**notebook 实例关闭后文件不会被保存**」
-> > —— [ModelScope魔搭notebook的磁盘空间不足问题怎么解决呢？](https://developer.aliyun.com/ask/582399)（2023-12）
->
-> 所以本指南的立足点是：**不要指望任何目录持久化**。
-> 训练产物（`best.pt` / `meta.json` / `classes.txt`）必须在关闭实例前下载到本地，
-> 或推到魔搭的模型仓库（git + git-lfs）里。这两条答复分别发布于 2023-12 与 2024-07，
-> 平台行为可能已变 —— 第 1 节给了一条命令让你自己确认当前实例的实际情况。
+> 「**notebook 实例关闭后文件不会被保存**」
+> —— [磁盘空间不足问题怎么解决呢？](https://developer.aliyun.com/ask/582399)
+
+**但本项目实测**：`/mnt/data`（阿里云 NAS）**跨实例保留** —— 用探针文件验证过
+（写入后换实例重开仍可读），本项目的 35 GB 数据集也确实在多台实例间延续了下来。
+
+**保守做法**：最终产物（`best.pt` / `meta.json` / `classes.txt`）**既存 `/mnt/data`、
+也下载回本机**，不要只依赖任一侧。`/tmp` 则**明确不持久**（虽然训练数据放那里最快）。
 
 ---
 
