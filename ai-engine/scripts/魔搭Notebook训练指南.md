@@ -2,6 +2,64 @@
 
 > 本机与 ai-engine 容器**都没有 GPU**（CPU 推理与批量控制见 README 第八节 8.5），
 > 训练放到 GPU 实例上做。这份指南只覆盖「训练与评测」，产出的 `best.pt` 再拿回本项目落地。
+
+---
+
+## ⚡ 零、先看这一节：魔搭实例的实测网络拓扑（**2026-10 实测，必读**）
+
+魔搭 Notebook 的**外网出口是受限的**。实测（`curl -sI -m 5` 逐个探测）：
+
+| 域名 | 结果 | 能用来做什么 |
+|---|---|---|
+| `storage.googleapis.com` | ✅ **通**（HTTP 400/200） | **SWG/WCS 数据集与图片都在这里** —— 直接下载，**不需要从本机上传数据集** |
+| `codeload.github.com` | ✅ **通**（HTTP 301） | **拉本项目代码走这里**（zip 下载，不用 git） |
+| `gitee.com` | ✅ 通 | 备用代码源 |
+| `hf-mirror.com` | ✅ 通 | HuggingFace 镜像 |
+| `www.modelscope.cn` | ✅ 通 | 魔搭自家 |
+| `github.com` | ❌ **不通**（连接超时 ~130s） | git clone / 权重下载 / ultralytics 字体下载都会卡死 |
+| `raw.githubusercontent.com` | ❌ **不通** | 不能 curl raw 文件 |
+| `ghproxy.com` | ❌ 不通 | 代理也救不了 |
+
+**三条由此得出的硬结论**：
+
+1. **代码用 codeload 拉 zip，不要 git clone**：
+   ```bash
+   curl -L -o wildlife.zip https://codeload.github.com/karryww67-collab/wildlife/zip/refs/heads/main
+   unzip -q wildlife.zip && mv wildlife-main wildlife-src
+   ```
+2. **数据集不用从本机上传**。SWG/WCS 的标注与图片都在 `storage.googleapis.com`，实例内直接下。
+   （本机若已下载过，也不必再传 —— 17 GB 级上传远慢于实例内直下。）
+3. **ultralytics 首次运行会尝试从 github.com 下 `Arial.Unicode.ttf`，会卡 3 轮重试**（每轮 30s 超时）。
+   预先放好字体可跳过（见 §2）。**不处理会拖慢启动，但不会让训练失败。**
+
+### 持久化：`/mnt/data` 是 NAS 持久盘（实测）
+
+实例上的 `/mnt/data` 挂载的是阿里云 NAS（`*.nas.aliyuncs.com`，1 PB 容量），
+**跨实例保留** —— 换一台实例后之前的文件还在（已用探针文件实测验证：写入后重开实例仍可读）。
+所以：
+
+| 放什么 | 放哪 |
+|---|---|
+| 代码、临时日志 | `/mnt/workspace/`（不持久，每次重拉） |
+| **数据集、训练产物**、跨实例要保留的东西 | **`/mnt/data/`**（持久） |
+
+> ⚠️ **NAS IO 明显慢于本地盘**。实测在 NAS 上训练时，dataloader 每步要 4-5 秒
+> （本地 SSD 约 0.5-1 秒），**每 epoch 从 ~2 分钟变成 ~20 分钟**。
+> 100 epochs 会从 3-5 小时变成 33 小时 —— **会耗尽 GPU 额度**。
+> **正式长训练前，先把数据集拷到 `/tmp`（本地盘）再训**：
+>
+> ```bash
+> mkdir -p /tmp/yolo && cp -r /mnt/data/combined/yolo/* /tmp/yolo/
+> sed -i 's|path: .*|path: /tmp/yolo|' /tmp/yolo/data.yaml
+> ```
+
+### 下载并发：`--workers 64`
+
+数据集图片走 Google bucket 单张 HTTP。实测并发从 16 提到 **64** 后速度明显改善
+（仍受实例出口带宽限制，SWG 的 1.1 万张约需 30-60 分钟）。脚本支持**断点续传** ——
+中断后重跑同一命令会自动跳过已下载的图。
+
+---
 >
 > ## ⚠️ 先记住这一条：实例关闭后，除了 `.ipynb` 什么都不保留
 >
@@ -143,6 +201,16 @@ apt-get update && apt-get install -y fonts-noto-cjk && rm -rf ~/.cache/matplotli
 # 没有 apt / 没有外网时：把任意中文字体放进 /usr/share/fonts/truetype/ 再清缓存即可
 ```
 
+**同时把字体放到 ultralytics 期望的位置**——它启动时会尝试从 `github.com` 下载
+`Arial.Unicode.ttf`（画框标注用），而魔搭上 github 不通，会卡 3 轮重试（约 100 秒）：
+
+```bash
+mkdir -p /root/.config/Ultralytics
+cp /usr/share/fonts/truetype/wqy/wqy-zenhei.ttc /root/.config/Ultralytics/Arial.Unicode.ttf
+# 或（若上面路径不存在）
+cp /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc /root/.config/Ultralytics/Arial.Unicode.ttf
+```
+
 `train.py` 开训前会查一次字体并打印结论（`已启用中文字体：...` 或提示安装命令），
 所以这一步有没有生效，一眼可见。
 
@@ -154,22 +222,31 @@ GPU 上训出来的 `best.pt` 拿回本地 CPU 容器可以直接加载（就是
 
 ## 3. 放代码与数据
 
-### 3.1 代码：用 git（推荐）
+### 3.1 代码：用 codeload 拉 zip（**不要 git clone**）
 
-项目已推到 GitHub（**当前是公开仓库**）：
-`https://github.com/karryww67-collab/wildlife`
+项目已推到 GitHub（公开仓库）：`https://github.com/karryww67-collab/wildlife`
+
+**魔搭上 `github.com` 不通（见 §0），`git clone` 会超时 130 秒后失败。改用 codeload：**
 
 ```bash
 cd /mnt/workspace
-git clone https://github.com/karryww67-collab/wildlife.git wildlife-src
+curl -L -o wildlife.zip https://codeload.github.com/karryww67-collab/wildlife/zip/refs/heads/main
+unzip -q wildlife.zip
+mv wildlife-main wildlife-src
 
-mkdir -p /mnt/workspace/wildlife && cd /mnt/workspace/wildlife
-cp /mnt/workspace/wildlife-src/ai-engine/scripts/*.py .
-cp /mnt/workspace/wildlife-src/ai-engine/check_weights.py .
-cp /mnt/workspace/wildlife-src/ai-engine/models/wildlife-v1.0/classes.txt .
+mkdir -p /mnt/workspace/wildlife/models
+cp /mnt/workspace/wildlife-src/ai-engine/scripts/*.py /mnt/workspace/wildlife/
+cp /mnt/workspace/wildlife-src/ai-engine/check_weights.py /mnt/workspace/wildlife/
+# 注意：classes.txt 用数据集自己的（见 §4），不要拷 models/wildlife-v1.0/ 里的那份
 ```
 
-> ⚠️ **上面这行 clone 没有 token —— 因为仓库是公开的。**
+应看到 **12 个 .py**：`prepare_dataset / train / evaluate / register_model / smoke_test /
+lila_to_yolo / wcs_to_yolo / voc_to_yolo / merge_datasets / check_weights …`
+
+> 备选：`gitee.com` 通（若项目有 Gitee 镜像可走）；`raw.githubusercontent.com`
+> 与 `ghproxy.com` 均**不通**，不要用。
+
+> ⚠️ **下面这行 clone 没有 token —— 因为仓库是公开的。**
 > 若日后改成私有，clone 时要认证，**不要把 token 拼进 URL**（会明文存进 `.git/config`），
 > 让它交互提示即可：提示 `Username` 输 `karryww67-collab`，提示 `Password` 输 token
 > （token 不是登录密码；粘贴时终端不显示任何字符，属正常）。
@@ -352,11 +429,21 @@ python ai-engine/scripts/register_model.py \
 | 参数 | 建议 | 理由 |
 |---|---|---|
 | `--imgsz` | 640 | 推理侧固定 640（README 8.5），训练也用 640 才与部署一致 |
-| `--workers` | 4 | 8 核的折中值；内存吃紧降到 2 |
+| `--workers` | **4**（数据在本地盘）/ **0**（数据在 NAS） | NAS 上多 worker 会 fork 卡死，实测 `workers=0` 才跑得动；**但速度只有本地盘的 1/10** —— 长训练务必先把数据拷到 `/tmp` 再用 4 |
+| `--batch` | 32（A10 实测，显存占 8.3 GB） | AutoBatch 在数据首轮扫描时常给偏小值，显式指定更稳 |
 | `--epochs` | 100~300 | 配合 `--patience 50` 早停 |
-| `--batch` | auto | AutoBatch 按显存定批，比手填稳 |
 | `--seed` | 0 | 固定随机种子，指标可复现 |
 | `--save-period` | 长训练设 10 | 多留按轮次编号的检查点 |
+
+### 实测速度基准（A10 24GB，19,723 张图）
+
+| 数据位置 | 每步耗时 | 每 epoch | 100 epochs 预计 |
+|---|---|---|---|
+| NAS（`/mnt/data`） | 4.8 s/it | ~20 min | **~33 小时**（超额度，不可行） |
+| 本地盘（`/tmp`） | ~0.5-1 s/it | ~2-3 min | **~4-5 小时**（可行） |
+
+> 这是本指南最重要的一条经验：**NAS 只用来存数据，不用来训数据。**
+> 训练前 `cp -r` 到 `/tmp`，训完把 `best.pt` 拷回 `/mnt/data` 或直接下载到本机。
 
 ---
 

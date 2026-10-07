@@ -84,7 +84,10 @@ wildlife/
 │   ├── app/services/           task_consumer / wildlife_detector / model_manager /
 │   │                           batch_processor / result_callback
 │   ├── app/api/health.py       健康检查
-│   ├── config/                 模型与检测配置
+│   ├── check_weights.py        权重体检（只依赖标准库）
+│   ├── scripts/                prepare_dataset / train / evaluate / register_model /
+│   │                           smoke_test / lila_to_yolo / wcs_to_yolo /
+│   │                           voc_to_yolo / merge_datasets + 三份训练指南
 │   ├── data/                   共享卷（仅保存上传的原图）
 │   └── models/                 权重目录（按版本分子目录）
 ├── frontend/                   Vue 3 前端
@@ -166,10 +169,29 @@ cd frontend && npm install && npm run dev
 
 ## 八、模型权重与训练链路
 
+### 8.0 训练数据（两个公开数据集合并，19 类）
+
+本系统的模型**基于两个公开红外相机数据集微调**，经 `ai-engine/scripts/merge_datasets.py` 合并为 **19 类**：
+
+| 数据集 | 提供方 | 许可 | 本项目取用 |
+|---|---|---|---|
+| **SWG Camera Traps 2018-2020** | IUCN SSC 亚洲野牛专家组 Saola Working Group | CDLA-Permissive 1.0 | 14 类，11,107 图 / 20,600 框 |
+| **WCS Camera Traps** | Wildlife Conservation Society | CDLA-Permissive 1.0 | 11 类，8,672 图 / 10,545 框 |
+
+合并去重后：**19,723 图（train 15,774 / val 3,949）、23,443 框**，按相机位点划分 train/val（避免同序列泄漏）。
+
+19 类：野猪、猕猴、麂、水鹿、鼬獾、红颊松鼠、果子狸、蟹獴、中华鬣羚、白鹇、黄喉貂、帚尾豪猪、灰孔雀雉、红原鸡、虎、豹、豹猫、猪獾、赤麂。
+
+数据来源、许可、引用格式与实测数字详见 [`数据集来源与引用.md`](数据集来源与引用.md)。
+
 ### 8.1 当前权重状态：**页面显示的版本 ≠ 实际生效的权重**
 
 三个正式版本目录（`wildlife-v1.0` / `v1.1` / `v2.0`）**都只有 `classes.txt` 与 `meta.json`，没有 `best.pt`**。
 引擎因此回退到 `YOLO_MODEL_PATH` 指向的 `models/test-coco-yolo11n/best.pt`（COCO 公开权重）。
+
+> 微调训练在魔搭 A10 上进行（`ai-engine/scripts/魔搭Notebook训练指南.md`）。
+> 训练产出 `best.pt` 后按 §8.3 的流程放入版本目录、评测、登记，
+> 回退告警即消失。在权重落地前，本节描述的「回退」状态依然成立。
 
 这件事原先只出现在启动日志里，页面上完全看不出来 —— 于是"当前模型：wildlife-v1.0"和实际跑的权重是两回事。现在它被显式暴露：
 
@@ -184,6 +206,10 @@ docker exec wildlife-ai-engine python check_weights.py --all
 `GET /ai/model/status` 返回的 `usingFallback` 为真即表示发生了回退，`effectiveWeight.md5` 是**实际加载**的那份权重的指纹，`issues` 逐条说明原因。「模型管理」页会在这种情况下显示醒目告警条，并列出该版本声明要识别的类别。
 
 各版本声明的类别（来自各自的 `classes.txt`）：**v1.0 20 类、v1.1 30 类、v2.0 45 类**，均为中文物种名（大熊猫、雪豹、川金丝猴、羚牛、小熊猫、豹猫、野猪 …）。
+
+> ⚠️ 这些类别表是**系统设计阶段的占位声明**，与实际训练数据（§8.0 的 19 类合并集）不一致。
+> 微调权重落地时应同步把 `classes.txt` 与 `model_version.class_config` 对齐为
+> 实际训练用的 19 类（`evaluate.py --write-classes` 会写出与权重一致的那份）。
 
 ### 8.2 指标的「实测」与「记录」
 
@@ -201,6 +227,10 @@ docker exec wildlife-ai-engine python check_weights.py --all
 | 脚本 | 作用 |
 |---|---|
 | `ai-engine/check_weights.py` | 权重体检：zip 结构、md5、是否回退、类别声明。**只依赖标准库，不需要 torch** |
+| `ai-engine/scripts/lila_to_yolo.py` | LILA COCO Camera Traps（SWG/WCS）→ YOLO 布局；内置换相机位点划分、框清洗、每类限量、并发下载 |
+| `ai-engine/scripts/wcs_to_yolo.py` | WCS 专用转换（11 类内置映射、多国家过滤、三云镜像源可切换） |
+| `ai-engine/scripts/voc_to_yolo.py` | Pascal VOC（NTLNP）→ YOLO；按编号连续段近似视频序列划分 |
+| `ai-engine/scripts/merge_datasets.py` | 合并 SWG + WCS 为统一 19 类，重映射 WCS 的 class_id，图片加前缀去重 |
 | `ai-engine/scripts/prepare_dataset.py` | 校验数据集（图片/标注配对、类别 id 越界、坐标越界、孤立标注），统计类别分布，生成 `data.yaml` |
 | `ai-engine/scripts/train.py` | 微调 YOLO；对"数据集太小 / epoch 太少 / CPU 硬跑长训练"给出明确警告 |
 | `ai-engine/scripts/evaluate.py` | 评测并写出带溯源的 `meta.json`；可选写出与权重一致的 `classes.txt`（已存在且内容不同则拒绝覆盖） |
@@ -213,9 +243,34 @@ docker exec wildlife-ai-engine python check_weights.py --all
 
   > 注意该平台的持久化行为：按魔搭官方开发者钉群的答复，**实例关闭后只有 `.ipynb` 会保留，其它文件与文件夹都不保存** —— 训练产物必须在关闭前取回。
 
-### 8.4 唯一缺的东西是数据
+### 8.4 数据获取与合并（已跑通）
 
-仓库内、`D:\毕设` 与 `E:\` 下**都没有任何 YOLO 数据集**，也没有历史训练产物。训练链路里唯一无法用代码替代的就是数据本身 —— 放入数据后按 8.3 的顺序执行即可产出真正可用的 `best.pt`。
+数据不放在仓库里（体积原因），但**获取与合并链路已全部脚本化并实测跑通**：
+
+```bash
+# 1) 下载两个数据集的标注文件（各 6.4 MB / 22.9 MB）
+curl -sL -o swg_bboxes.zip \
+  https://storage.googleapis.com/public-datasets-lila/swg-camera-traps/swg_camera_traps.bounding_boxes.with_species.zip
+curl -sL -o wcs_bboxes.zip \
+  https://storage.googleapis.com/public-datasets-lila/wcs/wcs_20220205_bboxes_with_classes.zip
+unzip swg_bboxes.zip && unzip wcs_bboxes.zip
+
+# 2) 转 YOLO 布局 + 下载图片（走 Google bucket，单张 HTTP 直取）
+python lila_to_yolo.py --preset swg --bbox-json swg_camera_traps.bounding_boxes.with_species.json \
+    --out data/swg --max-per-class 800 --download --workers 64
+python wcs_to_yolo.py --bbox-json wcs_20220205_bboxes_with_classes.json \
+    --out data/wcs --download --workers 64
+
+# 3) 合并为 19 类
+python merge_datasets.py      # SWG + WCS → data/combined（19 类）
+
+# 4) 门禁校验
+python prepare_dataset.py --dataset data/combined --classes data/combined/classes.txt \
+    --out data/combined/data.yaml
+```
+
+> 图片可逐张 HTTP 下载（无需下全量 200 万张），实测 19,723 张约 17 GB。
+> 训练环境的网络限制与实操坑见 [`ai-engine/scripts/魔搭Notebook训练指南.md`](ai-engine/scripts/魔搭Notebook训练指南.md)。
 
 ### 8.5 CPU 推理与批量控制
 
@@ -260,7 +315,7 @@ docker exec wildlife-ai-engine python check_weights.py --all
 
 ## 九、已知限制
 
-1. **需要自备微调权重**。`ai-engine/models/wildlife-v1.0|v1.1|v2.0/` 目前只有 `classes.txt` 与 `meta.json`，**没有 `best.pt`**；引擎会回退加载 `models/test-coco-yolo11n/best.pt`（COCO 预训练权重，不含鹿/虎/猴等目标类别）。放入微调权重后识别才有效果。这种"版本号与实际权重不一致"的状态现已**不再静默**：启动日志会打出自检结论，「模型管理」页会显示醒目告警条，`GET /ai/model/status` 与 `check_weights.py` 都能给出实际生效权重的 md5（详见第八节）。
+1. **微调权重待落地**。训练数据链路已跑通（§8.0/§8.4：SWG+WCS 合并 19 类、19,723 图 / 23,443 框），微调训练在魔搭 A10 上进行。在 `best.pt` 放入 `ai-engine/models/wildlife-v1.0/` 之前，引擎仍回退加载 `models/test-coco-yolo11n/best.pt`（COCO 预训练权重，不含 19 类中的任何目标）。这种"版本号与实际权重不一致"的状态现已**不再静默**：启动日志会打出自检结论，「模型管理」页会显示醒目告警条，`GET /ai/model/status` 与 `check_weights.py` 都能给出实际生效权重的 md5（详见第八节）。
    库内 798 条结果的类别分布恰好印证了这一点：实际检出的是 COCO 的 `dog / elephant / person / zebra` 与历史遗留的 `野猪 / 鹿`，而 `model_version.class_config` 声明的 `bear / deer / fox / monkey / tiger` **一次都没有检出过**。可直接对比 `GET /api/results/classes?usedOnly=false`（11 类，含声明未检出者）与 `?usedOnly=true`（6 类，仅实际检出者）。
 2. **超大任务未经压测**。实测最大任务为 32 张图；任务创建走单条 `IN (...)` 查询、结果消费约 200 条/秒，**10 万张级别未做加载测试**。
 3. **前端类型检查未过**。`npm run build`（= `vue-tsc && vite build`）会被类型错误拦住，故 `frontend/Dockerfile` 里用 `npx vite build` 绕过；类型层问题不影响运行，但修完后应改回标准命令。
