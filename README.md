@@ -175,10 +175,13 @@ cd frontend && npm install && npm run dev
 
 | 数据集 | 提供方 | 许可 | 本项目取用 |
 |---|---|---|---|
-| **SWG Camera Traps 2018-2020** | IUCN SSC 亚洲野牛专家组 Saola Working Group | CDLA-Permissive 1.0 | 14 类，11,107 图 / 20,600 框 |
+| **SWG Camera Traps 2018-2020** | IUCN SSC 亚洲野牛专家组 Saola Working Group | CDLA-Permissive 1.0 | 14 类，11,107 图 / 12,898 框 |
 | **WCS Camera Traps** | Wildlife Conservation Society | CDLA-Permissive 1.0 | 11 类，8,672 图 / 10,545 框 |
 
 合并去重后：**19,723 图（train 15,774 / val 3,949）、23,443 框**，按相机位点划分 train/val（避免同序列泄漏）。
+
+> SWG 的框数由合并总数反推（23,443 − 10,545 = 12,898）：该数据集原始图片与标注已清理，
+> 无法重跑统计。此值与转换阶段独立实测的 12,903 框吻合（差 5，为合并时跳过的个别样本）。
 
 19 类：野猪、猕猴、麂、水鹿、鼬獾、红颊松鼠、果子狸、蟹獴、中华鬣羚、白鹇、黄喉貂、帚尾豪猪、灰孔雀雉、红原鸡、虎、豹、豹猫、猪獾、赤麂。
 
@@ -347,5 +350,11 @@ python prepare_dataset.py --dataset data/combined --classes data/combined/classe
 | 文档 | 内容 |
 |---|---|
 | `打包-替换文档.md` | Docker 镜像构建、导出与替换流程 |
-| `文件变化总表.md` | 从上一版系统改造到本系统的逐文件变更记录 |
-| `ai-engine/config/` | 模型与检测参数配置 |
+| `设计文档_系统设计与实现.md` | 系统设计与实现全文档（模块、数据流、接口、表结构） |
+| `数据集来源与引用.md` | 训练数据来源、许可、引用格式与规模实测 |
+| `lila_bbox_audit.md` | LILA 各数据集物种级边界框的实测审计 |
+| `中国野生动物红外相机目标检测数据集调研.md` | 中国公开红外相机数据集调研 |
+| `ai-engine/scripts/魔搭Notebook训练指南.md` | 魔搭 GPU 训练完整流程与踩坑 |
+| `ai-engine/scripts/魔搭训练_完整命令.md` | 逐块可复制的训练命令 |
+| `ai-engine/scripts/数据集要求.md` | 找数据时的格式硬性要求 |
+| `ai-engine/scripts/WCS数据集使用指南.md` | WCS 数据集转换与使用 |
