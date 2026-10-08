@@ -138,12 +138,14 @@ services:
       # 而日志里没有任何错误）。
       # YOLO_CPU_THREADS: 4
       # 模型目录与版本，对应 docker/mysql/init.sql 里 model_version.model_path
-      # 说明：wildlife-v1.0/v1.1/v2.0 三个正式版本目录当前只有 classes.txt/meta.json，
-      # 尚无真正训练的权重；临时启用 test-coco-yolo11n（COCO yolo11n 公开权重）用于
-      # 打通链路与联调。真正训练出的 best.pt 就位后，请把下面两行改回对应版本。
+      # wildlife-v1.0 已是**真实训练权重**：YOLO11s 微调 19 类（SWG + WCS 合并数据集，
+      # 19,723 张 / 60 轮 / A10），实测 mAP50 0.8106、mAP50-95 0.6357、P 0.8495、R 0.7340。
+      # 权重 md5 = 30fa9b6644e0a79a89f0940fe5429bd3，评测记录见该目录下 meta.json
+      # （metricsVerified=true，含数据集 sha256 与复现命令）。
+      # test-coco-yolo11n 保留为 COCO 兜底权重：模型路径不存在时引擎会回退到它并告警。
       MODEL_ROOT: /models
-      ACTIVE_MODEL_VERSION: test-coco-yolo11n
-      YOLO_MODEL_PATH: /models/test-coco-yolo11n/best.pt
+      ACTIVE_MODEL_VERSION: wildlife-v1.0
+      YOLO_MODEL_PATH: /models/wildlife-v1.0/best.pt
       YOLO_IMAGE_SIZE: 640
       TZ: Asia/Shanghai
     ports:
