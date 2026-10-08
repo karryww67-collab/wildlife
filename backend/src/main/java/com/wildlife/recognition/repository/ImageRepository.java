@@ -6,8 +6,11 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.wildlife.recognition.entity.RecognitionImage;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface ImageRepository extends BaseMapper<RecognitionImage> {
@@ -138,4 +141,74 @@ public interface ImageRepository extends BaseMapper<RecognitionImage> {
         Long refs = selectCount(wrapper);   // MP 3.5.7 起 selectCount 返回 Long
         return refs == null ? 0L : refs;
     }
+
+    // ── 检出率（模块⑤统计报表） ────────────────────────────────────────────────
+
+    /**
+     * 识别成功（SUCCESS）的图像数 —— 检出率的<b>分母</b>。
+     *
+     * <pre>
+     * SELECT COUNT(*) FROM recognition_image
+     *  WHERE status = 'SUCCESS'
+     *    [AND create_time &gt;= ?] [AND create_time &lt;= ?]
+     * </pre>
+     *
+     * <p><b>为什么分母只算 SUCCESS</b>：{@code FAILED} 表示"系统没能处理这张图"
+     * （源文件缺失、解码失败等），{@code WAITING}/{@code PROCESSING} 表示"还没轮到它" ——
+     * 二者都<b>不能说明"图里没有动物"</b>。把它们计入分母，等于把系统故障报成模型漏检，
+     * 检出率会失真（本项目当前 149 张 FAILED 会把检出率从 99.0% 压到 72.4%）。
+     *
+     * @param start 起始时间（含），{@code null} = 不限
+     * @param end   结束时间（含），{@code null} = 不限
+     * @return 识别成功的图像数
+     */
+    @Select("""
+            <script>
+            SELECT COUNT(*) FROM recognition_image
+             WHERE status = 'SUCCESS'
+            <if test="start != null"> AND create_time &gt;= #{start}</if>
+            <if test="end != null">   AND create_time &lt;= #{end}</if>
+            </script>
+            """)
+    Long countSuccessImages(@Param("start") LocalDateTime start,
+                            @Param("end") LocalDateTime end);
+
+    /**
+     * 按天 / 小时分桶的识别成功图像数，供「检出率趋势」提供分母序列。
+     *
+     * <pre>
+     * SELECT &lt;分桶表达式&gt; AS time_slot, COUNT(*) AS cnt
+     *   FROM recognition_image
+     *  WHERE status = 'SUCCESS'
+     *  GROUP BY time_slot ORDER BY time_slot
+     * </pre>
+     *
+     * <p>分桶表达式由 {@code hourly} 在 SQL 内部二选一（MyBatis {@code <choose>}，
+     * <b>不是 Java 字符串拼接</b>，因此没有注入面）。过滤与分桶用的是同一列
+     * {@code create_time}，保证口径一致。
+     *
+     * @param hourly true = 按小时（{@code yyyy-MM-dd HH:00}）；false = 按天（{@code yyyy-MM-dd}）
+     * @param start  起始时间（含），{@code null} = 不限
+     * @param end    结束时间（含），{@code null} = 不限
+     * @return 每行 {@code {time_slot=时间串, cnt=图像数}}，按时间升序
+     */
+    @Select("""
+            <script>
+            SELECT
+            <choose>
+              <when test="hourly">DATE_FORMAT(create_time, '%Y-%m-%d %H:00')</when>
+              <otherwise>DATE(create_time)</otherwise>
+            </choose>
+            AS time_slot, COUNT(*) AS cnt
+              FROM recognition_image
+             WHERE status = 'SUCCESS'
+            <if test="start != null"> AND create_time &gt;= #{start}</if>
+            <if test="end != null">   AND create_time &lt;= #{end}</if>
+             GROUP BY time_slot
+             ORDER BY time_slot
+            </script>
+            """)
+    List<Map<String, Object>> countSuccessImagesByBucket(@Param("hourly") boolean hourly,
+                                                         @Param("start") LocalDateTime start,
+                                                         @Param("end") LocalDateTime end);
 }

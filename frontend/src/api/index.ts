@@ -43,6 +43,7 @@
  *   统计    GET    /api/statistics/overview              总量概览
  *           GET    /api/statistics/classes               类别（物种）分布
  *           GET    /api/statistics/trends                识别量趋势
+ *           GET    /api/statistics/detection-rate        检出率趋势
  *           GET    /api/statistics/protection-distribution  保护等级 / IUCN 构成
  *           GET    /api/statistics/confidence-distribution  置信度分布
  *           GET    /api/statistics/task-status            任务状态统计
@@ -238,6 +239,30 @@ export interface TrendResult {
   list: TrendPoint[]
 }
 
+/** 检出率趋势上的一个点 */
+export interface DetectionRatePoint {
+  time: string
+  /** 识别成功的图像数（分母） */
+  successImages: number
+  /** 有至少一个检出结果的图像数（分子） */
+  detectedImages: number
+  /** 识别成功但一个目标都没检出的图像数（空拍） */
+  undetectedImages: number
+  /** 检出率百分比，0-100，后端已保留两位小数 */
+  detectionRate: number
+}
+
+/** GET /api/statistics/detection-rate —— 检出率趋势 */
+export interface DetectionRateResult {
+  granularity: TrendGranularity
+  range: string
+  successImages: number
+  detectedImages: number
+  undetectedImages: number
+  detectionRate: number
+  list: DetectionRatePoint[]
+}
+
 /** POST /api/images/upload-batch —— 逐张返回成功与失败，单张失败不影响其余 */
 export interface BatchUploadResult {
   total: number
@@ -262,6 +287,14 @@ export interface StatisticsOverview {
   protectedSpeciesCount: number
   pendingReviewCount: number
   avgConfidence: number
+  /** 识别成功的图像数（检出率分母）。FAILED 的图像不计入 */
+  successImageCount: number
+  /** 有至少一个检出结果的图像数（检出率分子） */
+  detectedImageCount: number
+  /** 识别成功但一个目标都没检出的图像数（空拍） */
+  undetectedImageCount: number
+  /** 检出率百分比，0-100 */
+  detectionRate: number
 }
 
 /** GET /api/models/{id}/metrics */
@@ -515,6 +548,11 @@ export function getClassStatistics(params?: ClassStatsQuery) {
 /** GET /api/statistics/trends —— 识别量趋势，按小时可看动物活动节律。 */
 export function getTrendStatistics(params?: TrendQuery) {
   return apiClient.get<TrendResult>('/statistics/trends', { params })
+}
+
+/** GET /api/statistics/detection-rate —— 检出率趋势：有检出的图像 / 识别成功的图像。 */
+export function getDetectionRateStatistics(params?: TrendQuery) {
+  return apiClient.get<DetectionRateResult>('/statistics/detection-rate', { params })
 }
 
 /** GET /api/statistics/overview —— 图像 / 任务 / 结果 / 物种总量概览。 */

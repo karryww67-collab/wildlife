@@ -18,6 +18,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * 统计分析服务。
@@ -132,8 +134,15 @@ public class StatisticsService {
 
     // ── 总览 ────────────────────────────────────────────────────────────────
 
-    /** 大屏顶部指标：图像数、任务数、检出目标数、物种数、重点保护物种数、平均置信度。 */
+    /**
+     * 大屏顶部指标：图像数、任务数、检出目标数、物种数、重点保护物种数、平均置信度，
+     * 以及<b>检出率</b>（有检出的图像 / 识别成功的图像）。
+     */
     public Map<String, Object> overview(String range) {
+        LocalDateTime[] window = resolveRange(range);
+        LocalDateTime windowStart = window == null ? null : window[0];
+        LocalDateTime windowEnd = window == null ? null : window[1];
+
         List<RecognitionImage> images = filterImagesByRange(imageRepository.selectList(null), range);
         List<DetectionResult> results = filterResultsByRange(resultRepository.selectList(null), range);
 
@@ -159,6 +168,11 @@ public class StatisticsService {
             }
         }
 
+        // 检出率走 SQL 聚合（COUNT + COUNT DISTINCT），不把全表拉进内存 ——
+        // 10 万张图时上面两句 selectList(null) 会 OOM，而这两条 COUNT 始终只回一行。
+        long successImages = orZero(imageRepository.countSuccessImages(windowStart, windowEnd));
+        long detectedImages = orZero(resultRepository.countDetectedImages(windowStart, windowEnd));
+
         Map<String, Object> overview = new LinkedHashMap<>();
         overview.put("imageCount", images.size());
         overview.put("taskCount", taskRepository.selectList(null).size());
@@ -167,6 +181,10 @@ public class StatisticsService {
         overview.put("protectedSpeciesCount", protectedSpeciesCount);
         overview.put("pendingReviewCount", pendingReview);
         overview.put("avgConfidence", confidenceCount == 0 ? 0.0 : round(confidenceSum / confidenceCount, 4));
+        overview.put("successImageCount", successImages);
+        overview.put("detectedImageCount", detectedImages);
+        overview.put("undetectedImageCount", Math.max(successImages - detectedImages, 0L));
+        overview.put("detectionRate", detectionRateOf(detectedImages, successImages));
         return overview;
     }
 
@@ -253,6 +271,70 @@ public class StatisticsService {
         trend.put("range", range == null ? "all" : range);
         trend.put("list", list);
         return trend;
+    }
+
+    // ── 检出率趋势 ──────────────────────────────────────────────────────────
+
+    /**
+     * 检出率趋势：<b>有检出的图像数 / 识别成功的图像数</b>。
+     *
+     * <p>与 {@link #trend} 的区别正是本模块要补的那个缺口：
+     * <ul>
+     *   <li>{@code trend()} 数的是 <b>detection_result 的行数</b> —— 一张图检出 3 个目标就算 3。
+     *       它衡量的是"系统吐出了多少个框"，线越高只说明框越多，<b>回答不了
+     *       "这批图里有多少张确实拍到了动物"</b>；</li>
+     *   <li>本方法数的是 <b>图像</b>（{@code COUNT(DISTINCT image_id)}），
+     *       这才是需求里写的"检出率"。</li>
+     * </ul>
+     * 二者在长尾物种多的批次里会明显分叉：识别量涨、检出率不动。
+     *
+     * <p>返回的 {@code list} 已合并两条序列的时间 key 并按时间升序 —— 某天若
+     * "识别成功但一个目标都没检出"（本项目当前有 4 张这样的图），该天仍会出现在序列里
+     * （{@code detectionRate=0}），而不是整个点消失；否则趋势图会把这种"零检出"的日子
+     * 悄悄跳过，看起来像是从没上传过图。
+     *
+     * @param granularity {@code hour} / {@code day}
+     * @param range       {@code all} / {@code today} / {@code 7d} / {@code 30d} / {@code 90d} / {@code 1y}
+     * @return {@code {granularity, range, successImages, detectedImages, undetectedImages, detectionRate, list[]}}
+     */
+    public Map<String, Object> detectionRate(String granularity, String range) {
+        LocalDateTime[] window = resolveRange(range);
+        LocalDateTime start = window == null ? null : window[0];
+        LocalDateTime end = window == null ? null : window[1];
+        boolean hourly = "hour".equalsIgnoreCase(granularity);
+
+        long successImages = orZero(imageRepository.countSuccessImages(start, end));
+        long detectedImages = orZero(resultRepository.countDetectedImages(start, end));
+
+        Map<String, Long> successBySlot = toCountMap(imageRepository.countSuccessImagesByBucket(hourly, start, end));
+        Map<String, Long> detectedBySlot = toCountMap(resultRepository.countDetectedImagesByBucket(hourly, start, end));
+
+        Set<String> slots = new TreeSet<>();
+        slots.addAll(successBySlot.keySet());
+        slots.addAll(detectedBySlot.keySet());
+
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (String slot : slots) {
+            long success = successBySlot.getOrDefault(slot, 0L);
+            long detected = detectedBySlot.getOrDefault(slot, 0L);
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("time", slot);
+            point.put("successImages", success);
+            point.put("detectedImages", detected);
+            point.put("undetectedImages", Math.max(success - detected, 0L));
+            point.put("detectionRate", detectionRateOf(detected, success));
+            list.add(point);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("granularity", hourly ? "hour" : "day");
+        result.put("range", range == null ? "all" : range);
+        result.put("successImages", successImages);
+        result.put("detectedImages", detectedImages);
+        result.put("undetectedImages", Math.max(successImages - detectedImages, 0L));
+        result.put("detectionRate", detectionRateOf(detectedImages, successImages));
+        result.put("list", list);
+        return result;
     }
 
     // ── 置信度分布 ──────────────────────────────────────────────────────────
@@ -411,6 +493,46 @@ public class StatisticsService {
             list.add(item);
         });
         return list;
+    }
+
+    // ── 检出率内部工具 ──────────────────────────────────────────────────────
+
+    /**
+     * 检出率（百分比）= 有检出的图像 / 识别成功的图像。
+     *
+     * <p>分母为 0 时返回 0.0 而不是 NaN —— 空库或空时间窗不该在图上画成断线。
+     */
+    private static double detectionRateOf(long detectedImages, long successImages) {
+        return successImages <= 0 ? 0.0 : round(detectedImages * 100.0 / successImages, 2);
+    }
+
+    /** COUNT 的返回值是 {@link Long}，可能为 null，统一收成 0。 */
+    private static long orZero(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    /**
+     * 把 {@code {time_slot, cnt}} 行列表转成 Map，并保持时间升序。
+     *
+     * <p>MyBatis 把 COUNT 的结果按列类型可能映射成 Long / BigInteger / BigDecimal，
+     * 所以这里按 {@link Number} 取 longValue，不做强制转型，避免 ClassCastException。
+     * {@code time_slot} 为 null 的行直接跳过（分桶列不该为 null，防御性处理）。
+     */
+    private static Map<String, Long> toCountMap(List<Map<String, Object>> rows) {
+        Map<String, Long> map = new LinkedHashMap<>();
+        if (rows == null) {
+            return map;
+        }
+        for (Map<String, Object> row : rows) {
+            Object slot = row.get("time_slot");
+            if (slot == null) {
+                continue;
+            }
+            Object count = row.get("cnt");
+            long value = count instanceof Number number ? number.longValue() : 0L;
+            map.merge(slot.toString(), value, Long::sum);
+        }
+        return map;
     }
 
     private static double round(double value, int scale) {

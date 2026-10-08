@@ -10,7 +10,7 @@ import java.util.Map;
  * 统计分析。
  *
  * 面向大屏与论文图表，把识别结果聚合成可直接绘图的形态：
- * 总量概览、类别分布、保护等级分布、时间趋势、置信度分布、任务状态。
+ * 总量概览、类别分布、保护等级分布、时间趋势、检出率趋势、置信度分布、任务状态。
  *
  * <p>路径口径（与前端 {@code api/index.ts} 的契约一致）：
  * <pre>
@@ -53,6 +53,22 @@ public class StatisticsController {
     public ResponseEntity<?> trends(@RequestParam(defaultValue = "day") String granularity,
                                     @RequestParam(required = false) String range) {
         return ResponseEntity.ok(statisticsService.trend(granularity, range));
+    }
+
+    /**
+     * 检出率趋势：有检出的图像 / 识别成功的图像，按小时或天聚合。
+     *
+     * 与 /trends 的区别是本模块的关键 —— 那个数的是 detection_result 的行数（识别量），
+     * 一张图检出多个目标会被重复计数；这个数的是图像数（COUNT DISTINCT image_id）。
+     * 需求里的"检出率趋势"指的是后者。
+     *
+     * 分母只算 status='SUCCESS' 的图像：FAILED 是系统没处理成功，不代表"图里没有动物"，
+     * 计入分母会把系统故障报成模型漏检。
+     */
+    @GetMapping("/detection-rate")
+    public ResponseEntity<?> detectionRate(@RequestParam(defaultValue = "day") String granularity,
+                                           @RequestParam(required = false) String range) {
+        return ResponseEntity.ok(statisticsService.detectionRate(granularity, range));
     }
 
     /** 保护等级分布：国家一级 / 二级 / 三有 / 其他，以及 IUCN 等级分布。 */

@@ -128,6 +128,35 @@
         </div>
       </section>
 
+      <!-- 检出率趋势 -->
+      <section class="card span-2">
+        <div class="card-head">
+          <span>检出率趋势</span>
+          <span class="head-meta">
+            有检出 {{ detectionRate.detectedImages.toLocaleString('zh-CN') }} /
+            识别成功 {{ detectionRate.successImages.toLocaleString('zh-CN') }} 张 ·
+            空拍 {{ detectionRate.undetectedImages }} 张
+          </span>
+        </div>
+        <div class="chart-wrap">
+          <StatisticsChart
+            v-if="detectionRateData.length"
+            type="area"
+            :data="detectionRateData"
+            :height="240"
+            unit="%"
+            :smooth="true"
+          />
+          <div v-else class="state small">所选时间范围内暂无识别记录</div>
+        </div>
+        <p class="progress-note">
+          检出率 = 至少检出一个目标的图像数 ÷ 识别成功的图像数，整体
+          {{ detectionRate.detectionRate.toFixed(2) }}%；分母不含识别失败与排队中的图像。
+          与上方「识别量趋势」口径不同：识别量统计的是目标个数，检出率统计的是图像张数，
+          一张图检出多个目标不会让检出率超过 100%。
+        </p>
+      </section>
+
       <!-- 置信度分布 -->
       <section class="card span-2">
         <div class="card-head">
@@ -189,12 +218,14 @@ import {
   colorOfClass,
   getClassStatistics,
   getConfidenceDistribution,
+  getDetectionRateStatistics,
   getOverview,
   getProtectionDistribution,
   getTaskStatusStatistics,
   getTrendStatistics,
   TASK_STATUS_LABEL,
   type ClassDistribution,
+  type DetectionRateResult,
   type NameValue,
   type StatisticsOverview,
   type TaskStatusStatistics,
@@ -239,6 +270,17 @@ const protectionDistribution = ref<{ byProtectionLevel: NameValue[]; byIucn: Nam
 
 const trend = ref<TrendPoint[]>([])
 
+/** 检出率趋势：分子/分母都是图像张数，与 trend（目标个数）不是一个口径 */
+const detectionRate = ref<DetectionRateResult>({
+  granularity: 'day',
+  range: 'all',
+  successImages: 0,
+  detectedImages: 0,
+  undetectedImages: 0,
+  detectionRate: 0,
+  list: []
+})
+
 const confidenceDistribution = ref<{
   total: number
   list: Array<{ range: string; value: number; ratio: number }>
@@ -256,6 +298,7 @@ const overviewCards = computed(() => [
   { label: '图像总数', value: overview.value.imageCount.toLocaleString('zh-CN'), tone: '' },
   { label: '识别任务', value: overview.value.taskCount.toLocaleString('zh-CN'), tone: '' },
   { label: '识别结果', value: overview.value.resultCount.toLocaleString('zh-CN'), tone: 'info' },
+  { label: '检出率', value: overview.value.detectionRate.toFixed(2) + '%', tone: 'ok' },
   { label: '涉及物种', value: overview.value.speciesCount, tone: 'info' },
   { label: '重点保护物种', value: overview.value.protectedSpeciesCount, tone: 'warn' },
   { label: '待复核结果', value: overview.value.pendingReviewCount.toLocaleString('zh-CN'), tone: 'warn' },
@@ -276,6 +319,10 @@ const iucnData = computed(() => protectionDistribution.value.byIucn)
 
 const trendData = computed(() =>
   trend.value.map((item) => ({ name: item.time, value: item.value }))
+)
+
+const detectionRateData = computed(() =>
+  detectionRate.value.list.map((item) => ({ name: item.time, value: item.detectionRate }))
 )
 
 const confidenceData = computed(() =>
@@ -340,6 +387,18 @@ async function loadTrend() {
   }
 }
 
+async function loadDetectionRate() {
+  try {
+    const res = await getDetectionRateStatistics({
+      granularity: granularity.value,
+      range: range.value || undefined
+    })
+    detectionRate.value = res.data ?? detectionRate.value
+  } catch {
+    detectionRate.value = { ...detectionRate.value, list: [] }
+  }
+}
+
 async function loadConfidence() {
   try {
     const res = await getConfidenceDistribution()
@@ -366,6 +425,7 @@ async function loadAll() {
       loadSpecies(),
       loadProtection(),
       loadTrend(),
+      loadDetectionRate(),
       loadConfidence(),
       loadTaskStatus()
     ])
@@ -382,6 +442,7 @@ function changeRange(value: RangeKey) {
 function changeGranularity(value: 'hour' | 'day') {
   granularity.value = value
   loadTrend()
+  loadDetectionRate()
 }
 
 onMounted(loadAll)
@@ -441,7 +502,7 @@ onMounted(loadAll)
 /* ── 概览 ── */
 .stat-row {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 12px;
   margin-bottom: 14px;
 }
