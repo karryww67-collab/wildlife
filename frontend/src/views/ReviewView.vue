@@ -29,6 +29,9 @@
       <div class="stat-card">
         <span class="stat-value warn">{{ stats.pending }}</span>
         <span class="stat-label">待复核</span>
+        <span v-if="stats.pendingMissing > 0" class="stat-note">
+          其中 {{ stats.pendingMissing }} 项原图已丢失
+        </span>
       </div>
       <div class="stat-card">
         <span class="stat-value">{{ stats.reviewRate.toFixed(1) }}%</span>
@@ -82,6 +85,15 @@
         </select>
       </label>
 
+      <label class="field field-check">
+        <input
+          type="checkbox"
+          v-model="filters.hideMissing"
+          @change="applyFilters"
+        />
+        <span class="check-label">隐藏原图已丢失的项</span>
+      </label>
+
       <span class="filter-hint">
         待复核队列已按置信度升序排列，优先处理低置信度结果
       </span>
@@ -107,14 +119,14 @@
         </div>
         <div v-else-if="!rows.length" class="state">
           <span class="state-icon">✅</span>
-          <span>当前筛选条件下没有待复核的结果</span>
+          <span>{{ emptyHint }}</span>
         </div>
 
         <template v-else>
           <div class="bulk-bar">
             <label class="check-all">
               <input type="checkbox" :checked="allSelected" @change="toggleAll" />
-              <span>全选本页</span>
+              <span>全选本页可复核项</span>
             </label>
             <div class="bulk-actions">
               <button class="btn-mini primary" :disabled="!selectedIds.length" @click="openBatch">
@@ -146,6 +158,8 @@
                   <input
                     type="checkbox"
                     :checked="selectedIds.includes(row.id)"
+                    :disabled="row.imageAvailable === false"
+                    :title="row.imageAvailable === false ? '原图已丢失，无法复核' : ''"
                     @change="toggleRow(row.id)"
                   />
                 </td>
@@ -153,6 +167,11 @@
                 <td>
                   <span class="dot" :style="{ background: colorOfClass(row.classId, row.className) }"></span>
                   {{ row.className }}
+                  <span
+                    v-if="row.imageAvailable === false"
+                    class="tag-lost"
+                    title="磁盘上的原图已丢失，看不到图就无法核对"
+                  >原图丢失</span>
                 </td>
                 <td>
                   <div class="conf-cell">
@@ -165,16 +184,38 @@
                 </td>
                 <td class="mono small">{{ row.x1 }},{{ row.y1 }} → {{ row.x2 }},{{ row.y2 }}</td>
                 <td class="ops">
-                  <button class="btn-mini primary" @click.stop="openSingle(row)">复核</button>
+                  <button
+                    class="btn-mini primary"
+                    :disabled="row.imageAvailable === false"
+                    :title="row.imageAvailable === false ? '原图已丢失，无法核对' : '复核该结果'"
+                    @click.stop="openSingle(row)"
+                  >复核</button>
                 </td>
               </tr>
             </tbody>
           </table>
 
           <footer v-if="total > size" class="pager">
-            <button class="btn-mini" :disabled="page <= 1" @click="turnPage(-1)">上一页</button>
-            <span class="pager-text">第 {{ page }} / {{ totalPages }} 页</span>
-            <button class="btn-mini" :disabled="page >= totalPages" @click="turnPage(1)">下一页</button>
+            <div class="pager-row">
+              <button class="btn-mini" :disabled="page <= 1" @click="turnPage(-1)">上一页</button>
+              <span class="pager-text">第 {{ page }} / {{ totalPages }} 页</span>
+              <button class="btn-mini" :disabled="page >= totalPages" @click="turnPage(1)">下一页</button>
+            </div>
+            <div class="pager-jump">
+              <span class="pager-text">跳至</span>
+              <input
+                v-model.number="jumpTo"
+                class="pager-input"
+                type="number"
+                min="1"
+                :max="totalPages"
+                placeholder="页码"
+                @keyup.enter="goToPage()"
+              />
+              <span class="pager-text">页</span>
+              <button class="btn-mini" :disabled="!canJump" @click="goToPage()">跳转</button>
+              <span class="pager-text pager-hint">共 {{ total }} 条 · 每页 {{ size }} 条</span>
+            </div>
           </footer>
         </template>
       </section>
@@ -219,8 +260,17 @@
             </div>
             <p class="active-tip">{{ confidenceTip(activeRow.confidence) }}</p>
             <div class="active-actions">
-              <button class="btn-mini primary" @click="openSingle(activeRow)">复核该结果</button>
-              <button class="btn-mini" @click="openReviewOfImage">复核该图全部待定项</button>
+              <button
+                class="btn-mini primary"
+                :disabled="!canReview(activeRow)"
+                :title="canReview(activeRow) ? '' : '原图已丢失，无法核对'"
+                @click="openSingle(activeRow)"
+              >复核该结果</button>
+              <button
+                class="btn-mini"
+                :disabled="!canReview(activeRow)"
+                @click="openReviewOfImage"
+              >复核该图全部待定项</button>
             </div>
           </div>
         </div>
@@ -267,7 +317,12 @@ const page = ref(1)
 const size = 20
 
 const tasks = ref<RecognitionTask[]>([])
-const filters = reactive({ taskId: 0, maxConfidence: 0 })
+/**
+ * hideMissing 默认开：原图已丢失（悬空引用）的结果看不到图，留着也复核不了，
+ * 只会把按置信度升序的队列前排占满 —— 默认把这些脏数据挡在队列外。
+ * 关掉它仍能在列表里看到并看清原因（会打「原图丢失」标记、复核按钮禁用）。
+ */
+const filters = reactive({ taskId: 0, maxConfidence: 0, hideMissing: true })
 
 const selectedIds = ref<number[]>([])
 const activeRow = ref<DetectionResult | null>(null)
@@ -323,6 +378,7 @@ const stats = ref<ReviewStats>({
   total: 0,
   reviewed: 0,
   pending: 0,
+  pendingMissing: 0,
   confirmed: 0,
   corrected: 0,
   rejected: 0,
@@ -333,10 +389,46 @@ const stats = ref<ReviewStats>({
 })
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
+
+/** 跳页输入框的值；空串表示未输入。 */
+const jumpTo = ref<number | string>('')
+
+/** 目标页合法才允许跳转：必须是整数、落在 [1, totalPages] 内，且不是当前页。 */
+const canJump = computed(() => {
+  const n = Number(jumpTo.value)
+  return Number.isInteger(n) && n >= 1 && n <= totalPages.value && n !== page.value
+})
+
+/** 跳到输入框指定的页。越界或非数字一律忽略，不改变当前页。 */
+function goToPage() {
+  if (!canJump.value) return
+  page.value = Number(jumpTo.value)
+  jumpTo.value = ''
+  loadPending()
+}
+
+/** 原图已丢失的结果不可复核 —— 只有 imageAvailable === false 才算，null/undefined 一律放行。 */
+function canReview(row: DetectionResult): boolean {
+  return row.imageAvailable !== false
+}
+
+/** 本页真正能复核的行，全选与「开始复核本页」都以它为准。 */
+const reviewableRows = computed(() => rows.value.filter(canReview))
+
 const allSelected = computed(
-  () => rows.value.length > 0 && rows.value.every((row) => selectedIds.value.includes(row.id))
+  () =>
+    reviewableRows.value.length > 0 &&
+    reviewableRows.value.every((row) => selectedIds.value.includes(row.id))
 )
-const pendingRows = computed(() => rows.value)
+const pendingRows = computed(() => reviewableRows.value)
+
+/** 队列被清空时的文案：区分"本来就没有"和"被 hideMissing 挡掉了"。 */
+const emptyHint = computed(() => {
+  if (filters.hideMissing && stats.value.pendingMissing > 0) {
+    return `当前筛选条件下没有可复核的结果（另有 ${stats.value.pendingMissing} 项因原图已丢失被隐藏）`
+  }
+  return '当前筛选条件下没有待复核的结果'
+})
 
 /** 复核弹窗读类别清单用的模型 ID。 */
 const dialogModelId = computed(
@@ -353,24 +445,37 @@ function confidenceTip(confidence: number): string {
   return '置信度偏低，容易是误检，请重点确认是否为可辨认的动物目标'
 }
 
+/** 迟到的响应按序号丢弃 —— 切筛选条件够快时，慢的旧请求会覆盖掉新结果。 */
+let tasksSeq = 0
+let statsSeq = 0
+let pendingSeq = 0
+
 async function loadTasks() {
+  const seq = ++tasksSeq
   try {
     // 任务下拉要尽量全的选项：直接取后端单页上限（maxLimit = 200）
     const res = await listTasks({ page: 1, size: 200 })
+    if (seq !== tasksSeq) return
     tasks.value = res.data?.list ?? []
   } catch {
+    if (seq !== tasksSeq) return
     tasks.value = []
   }
 }
 
 async function loadStats() {
+  const seq = ++statsSeq
   try {
     const res = await getReviewStats(filters.taskId > 0 ? filters.taskId : undefined)
+    // 全局统计要扫全表（约 1s），按任务统计只有几十毫秒 —— 不丢弃迟到响应的话，
+    // "先看全部、再切到某任务" 会把全局数字盖回任务口径上（空态提示会跟着写错）。
+    if (seq !== statsSeq) return
     const data = (res.data ?? {}) as unknown as Partial<ReviewStats>
     stats.value = {
       total: data.total ?? 0,
       reviewed: data.reviewed ?? 0,
       pending: data.pending ?? 0,
+      pendingMissing: data.pendingMissing ?? 0,
       confirmed: data.confirmed ?? 0,
       corrected: data.corrected ?? 0,
       rejected: data.rejected ?? 0,
@@ -385,17 +490,21 @@ async function loadStats() {
 }
 
 async function loadPending() {
+  const seq = ++pendingSeq
   loading.value = true
   try {
     const res = await listPendingReviews({
       taskId: filters.taskId > 0 ? filters.taskId : undefined,
       maxConfidence: filters.maxConfidence > 0 ? filters.maxConfidence : undefined,
+      hideMissing: filters.hideMissing || undefined,
       page: page.value,
       size
     })
+    if (seq !== pendingSeq) return
     rows.value = res.data?.list ?? []
     total.value = res.data?.total ?? 0
-    selectedIds.value = []
+    // 已被隐藏的行不该留在选中集合里，否则批量复核会带上它们
+    selectedIds.value = selectedIds.value.filter((id) => rows.value.some((r) => r.id === id && canReview(r)))
     if (activeRow.value && !rows.value.some((r) => r.id === activeRow.value?.id)) {
       activeRow.value = null
       preview.value = { image: null, detections: [] }
@@ -403,10 +512,12 @@ async function loadPending() {
       setActive(rows.value[0])
     }
   } catch {
+    if (seq !== pendingSeq) return
     rows.value = []
     total.value = 0
   } finally {
-    loading.value = false
+    // 迟到的响应不该把新一轮请求的 loading 关掉
+    if (seq === pendingSeq) loading.value = false
   }
 }
 
@@ -421,6 +532,7 @@ function applyFilters() {
 function resetFilters() {
   filters.taskId = 0
   filters.maxConfidence = 0
+  filters.hideMissing = true
   applyFilters()
 }
 
@@ -430,13 +542,16 @@ function turnPage(delta: number) {
 }
 
 function toggleRow(id: number) {
+  // 原图已丢失的行不接受勾选：批量复核里混进它只会在后端被跳过
+  const row = rows.value.find((r) => r.id === id)
+  if (!row || !canReview(row)) return
   const index = selectedIds.value.indexOf(id)
   if (index >= 0) selectedIds.value.splice(index, 1)
   else selectedIds.value.push(id)
 }
 
 function toggleAll() {
-  selectedIds.value = allSelected.value ? [] : rows.value.map((row) => row.id)
+  selectedIds.value = allSelected.value ? [] : reviewableRows.value.map((row) => row.id)
 }
 
 async function setActive(row: DetectionResult) {
@@ -480,6 +595,8 @@ function openBatch() {
 
 /** 复核当前图像上的全部待定项。 */
 function openReviewOfImage() {
+  // 当前图的原图丢了，它上面的结果同样无法复核
+  if (activeRow.value && !canReview(activeRow.value)) return
   const pending = preview.value.detections.filter(
     (item) => (item.reviewStatus ?? 'PENDING') === 'PENDING'
   )
@@ -489,10 +606,11 @@ function openReviewOfImage() {
   dialogVisible.value = true
 }
 
-/** 按顺序复核本页队列：从第一条待复核结果开始。 */
+/** 按顺序复核本页队列：从第一条**可复核**的结果开始（跳过原图已丢失的）。 */
 function startWorkflow() {
-  if (!rows.value.length) return
-  openSingle(rows.value[0])
+  const first = rows.value.find(canReview)
+  if (!first) return
+  openSingle(first)
 }
 
 function onReviewed(payload: {
@@ -594,6 +712,8 @@ onBeforeUnmount(releaseRaw)
 .stat-value.warn { color: var(--color-warning); }
 .stat-value.bad { color: var(--color-danger); }
 .stat-label { font-size: 11.5px; color: var(--text-muted); }
+/* 待复核的口径说明：pending 是全量，列表可能被 hideMissing 挡掉一部分 */
+.stat-note { font-size: 11px; color: var(--text-warning); line-height: 1.4; }
 
 /* ── 卡片 ── */
 .card {
@@ -660,6 +780,16 @@ onBeforeUnmount(releaseRaw)
 }
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 170px; }
 .field-label { font-size: 11.5px; color: var(--text-muted); }
+
+/* 勾选框类筛选项：与下拉框底对齐，不要撑出 32px 高 */
+.field-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 32px;
+}
+.check-label { font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
 .filter-hint {
   flex: 1;
   min-width: 200px;
@@ -752,6 +882,19 @@ input[type='checkbox'] {
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: middle;
+}
+
+/* 原图已丢失（悬空引用）：警示色小标签，紧跟在物种名后面 */
+.tag-lost {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--text-warning);
+  background: var(--bg-badge-warning);
+  border: 1px solid var(--color-warning);
+  border-radius: 9px;
+  white-space: nowrap;
 }
 
 .conf-cell { position: relative; display: flex; align-items: center; }
@@ -854,13 +997,37 @@ input[type='checkbox'] {
 /* ── 分页 ── */
 .pager {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  gap: 8px;
   padding: 12px;
   border-top: 1px solid var(--border-admin-table);
 }
+.pager-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.pager-jump {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
 .pager-text { font-size: 12px; color: var(--text-muted); }
+.pager-hint { opacity: 0.75; }
+.pager-input {
+  width: 72px;
+  text-align: center;
+}
+/* 数字输入框的上下箭头在窄宽度下会挤掉数字，隐藏之；仍可用键盘上下键调值 */
+.pager-input::-webkit-outer-spin-button,
+.pager-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pager-input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 
 @media (max-width: 1440px) {
   .review-body { grid-template-columns: 1fr; }
