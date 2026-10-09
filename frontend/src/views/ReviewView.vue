@@ -245,7 +245,7 @@
             :detections="preview.detections"
             :selected-id="activeRow?.id ?? null"
             :show-legend="preview.detections.length > 1"
-            :color-mode="activeRow && activeRow.confidence < 0.6 ? 'confidence' : 'class'"
+            :color-mode="activeRow && activeRow.confidence < CONFIDENCE_LOW ? 'confidence' : 'class'"
             max-height="44vh"
             @select="onBoxSelect"
           />
@@ -309,6 +309,16 @@ import {
   type ReviewStats
 } from '@/api/index'
 import { loadProtectedImage, revokeImageUrl } from '@/utils/imageUrl'
+
+/**
+ * 置信度分级阈值 —— 复核场景的判读口径，集中在此处，避免同一个数字散落在模板与函数里。
+ * 注意：这几个值是「怎么提示复核员」的展示口径，不是后端的入库/复核判定条件，
+ * 后端并没有可配置的复核阈值，所以不从这里反向约束后端。
+ */
+/** 低于此值视为「偏低」，预览框改用按置信度着色，提示语也最强 */
+const CONFIDENCE_LOW = 0.6
+/** 高于此值视为「较高」，提示可以快速确认 */
+const CONFIDENCE_HIGH = 0.85
 
 const loading = ref(false)
 const rows = ref<DetectionResult[]>([])
@@ -440,8 +450,8 @@ function confPercent(item: DetectionResult): number {
 }
 
 function confidenceTip(confidence: number): string {
-  if (confidence >= 0.85) return '置信度较高，模型判定较可靠，快速确认即可'
-  if (confidence >= 0.6) return '置信度中等，建议结合体型与毛色特征判断是否修正物种'
+  if (confidence >= CONFIDENCE_HIGH) return '置信度较高，模型判定较可靠，快速确认即可'
+  if (confidence >= CONFIDENCE_LOW) return '置信度中等，建议结合体型与毛色特征判断是否修正物种'
   return '置信度偏低，容易是误检，请重点确认是否为可辨认的动物目标'
 }
 

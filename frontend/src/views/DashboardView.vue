@@ -384,7 +384,9 @@ async function load() {
   const taskPage = taskRes.status === 'fulfilled' ? taskRes.value.data : null
   tasks.value = taskPage?.list ?? []
   taskTotal.value = taskPage?.total ?? 0
-  activeModel.value = modelRes.status === 'fulfilled' ? modelRes.value.data ?? null : null
+  const modelData = modelRes.status === 'fulfilled' ? modelRes.value.data : null
+  // 后端在没有启用模型时返回 {model:{},message:"..."}，不是 ModelVersion —— 按 modelName 判别
+  activeModel.value = modelData && 'modelName' in modelData ? modelData : null
 
   loading.value = false
 }

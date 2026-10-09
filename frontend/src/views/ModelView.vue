@@ -384,7 +384,7 @@ function fmt(value?: number | null): string {
   return value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
 }
 
-function formatTime(value?: string): string {
+function formatTime(value?: string | null): string {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -543,7 +543,7 @@ async function submitForm() {
 async function loadEngineStatus() {
   engineError.value = ''
   try {
-    const res = await getEngineModelStatus(current.value?.version)
+    const res = await getEngineModelStatus(current.value?.version ?? undefined)
     engineStatus.value = res.data ?? null
   } catch (err: any) {
     engineStatus.value = null

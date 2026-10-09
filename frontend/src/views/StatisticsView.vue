@@ -254,7 +254,11 @@ const overview = ref<StatisticsOverview>({
   speciesCount: 0,
   protectedSpeciesCount: 0,
   pendingReviewCount: 0,
-  avgConfidence: 0
+  avgConfidence: 0,
+  successImageCount: 0,
+  detectedImageCount: 0,
+  undetectedImageCount: 0,
+  detectionRate: 0
 })
 
 const speciesDistribution = ref<ClassDistribution>({

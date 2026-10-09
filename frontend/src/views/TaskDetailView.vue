@@ -378,7 +378,7 @@ const pendingDetections = computed(() =>
   detections.value.filter((d) => (d.reviewStatus ?? 'PENDING') === 'PENDING')
 )
 
-function formatTime(value?: string): string {
+function formatTime(value?: string | null): string {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value

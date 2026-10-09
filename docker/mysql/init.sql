@@ -207,7 +207,10 @@ CREATE TABLE IF NOT EXISTS recognition_image (
 
     INDEX idx_image_task (task_id),
 
-    INDEX idx_image_status (status)
+    INDEX idx_image_status (status),
+
+    -- 图像列表默认按 create_time DESC, id DESC 排序（ImageService），无此索引会退化为全表排序
+    INDEX idx_image_create_time (create_time)
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 COMMENT='批量识别图片表';
@@ -256,7 +259,10 @@ CREATE TABLE IF NOT EXISTS detection_result (
 
     INDEX idx_result_confidence (confidence),
 
-    INDEX idx_result_review (review_status)
+    INDEX idx_result_review (review_status),
+
+    -- 结果列表默认按 create_time DESC, id DESC 排序（RecognitionResultService），无此索引会退化为全表排序
+    INDEX idx_result_create_time (create_time)
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 COMMENT='YOLO目标检测结果表';

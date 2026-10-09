@@ -156,6 +156,17 @@ export interface DetectionResult {
   x2: number
   y2: number
   reviewStatus: ReviewStatus
+  /**
+   * 所属图像的**原图物理文件**是否还在（后端现算，不落库）。
+   *
+   * false = 磁盘上的原图已丢失（库里还留着识别结果，即"悬空引用"）。
+   * 这种结果在复核弹窗里取图会 404，看不到图就没有判据 —— 后端会拒绝提交，
+   * 前端也应禁用「复核」按钮。
+   *
+   * 目前只有 `GET /api/reviews/pending` 会填这个字段，其它接口返回 null / undefined，
+   * 所以判断可用性时要用 `=== false` 而不是 `!row.imageAvailable`。
+   */
+  imageAvailable?: boolean | null
   createTime: string | null
 }
 
@@ -318,6 +329,11 @@ export interface ReviewStats {
   total: number
   reviewed: number
   pending: number
+  /**
+   * 待复核里"原图已丢失、根本没法复核"的条数。
+   * pending 仍是全量口径，前端据此说明差额（否则会出现"统计 2798、列表 2000"对不上账）。
+   */
+  pendingMissing: number
   confirmed: number
   corrected: number
   rejected: number
@@ -387,6 +403,8 @@ export interface PendingReviewQuery {
   taskId?: number
   /** 置信度上限，只取低于该值的结果；不传则返回全部待复核 */
   maxConfidence?: number
+  /** true = 把"原图已丢失"的项从队列里排除（后端在 SQL 里过滤，分页仍正确） */
+  hideMissing?: boolean
   page?: number
   size?: number
 }
@@ -702,6 +720,10 @@ export interface ResultExportQuery {
   /** 最低置信度，0 ~ 1 */
   minConfidence?: number
   reviewStatus?: ReviewStatus
+  /** 检出时间下界，ISO 日期时间（如 2026-09-24T00:00），闭区间 */
+  startTime?: string
+  /** 检出时间上界，ISO 日期时间 */
+  endTime?: string
 }
 
 /** CSV 导出下载地址，可直接 window.open（不带鉴权头）。 */
@@ -727,9 +749,19 @@ export async function exportResultsCsv(params: ResultExportQuery = {}) {
 
 // ── 复核（批量 / 记录 / 统计）────────────────────────────────────────────────
 
+/** POST /api/reviews/batch 请求体 —— 同一批共用同一个动作与修正类别。 */
+export interface BatchReviewPayload {
+  resultIds: number[]
+  action: ReviewAction
+  /** action=CORRECT 时必填：修正后的物种名 */
+  correctedClass?: string
+  remark?: string
+}
+
 /** POST /api/reviews/batch —— 批量复核，同一动作、同一修正类别。 */
 export function submitBatchReview(payload: BatchReviewPayload) {
-  return apiClient.post<{ reviewed: number }>('/reviews/batch', payload)
+  // skippedMissing：因原图已丢失被后端跳过的条数（批量选择混进脏数据时不会让整批失败）
+  return apiClient.post<{ reviewed: number; skippedMissing?: number }>('/reviews/batch', payload)
 }
 
 /** GET /api/reviews/records —— 复核记录列表。 */
@@ -744,11 +776,15 @@ export function getReviewStats(taskId?: number) {
 
 // ── 模型（详情 / 指标 / 启停）────────────────────────────────────────────────
 
+/** 没有启用模型时 /api/models/active 的响应 —— 后端返回 {"model":{},"message":"尚未启用任何模型"}。 */
+export interface NoActiveModel {
+  model: Record<string, never>
+  message: string
+}
+
 /** GET /api/models/active —— 当前启用的模型。 */
 export function getActiveModel() {
-  return apiClient.get<ModelVersion | { model: Record<string, never>; message: string }>(
-    '/models/active'
-  )
+  return apiClient.get<ModelVersion | NoActiveModel>('/models/active')
 }
 
 /** GET /api/models/{id} —— 模型详情。 */
@@ -979,6 +1015,7 @@ export interface EngineModelStatus {
 export function getEngineModelStatus(version?: string) {
   return apiClient.get<EngineModelStatus>('/ai/model/status', {
     baseURL: '',
+    // version 可能来自 ModelVersion.version（可为 null），null 与 undefined 同样按"不指定版本"处理
     params: version ? { version } : undefined
   })
 }
