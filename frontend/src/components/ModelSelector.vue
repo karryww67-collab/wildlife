@@ -250,9 +250,19 @@ defineExpose({ reload: load })
 
 .model-item {
   display: flex;
+  /*
+   * 必须允许换行。
+   *
+   * 模型选择卡在模型管理页只有 420px 宽，而一行里要塞下
+   * 「版本号 + 启用中标签 + 5 个指标 + 操作按钮」——放不下。
+   * 不换行时 mi-metrics / mi-actions 都是 flex-shrink: 0（不能压），
+   * 于是唯一可压的 mi-main 被挤成 0 宽，里面的版本号与标签溢出到指标上，
+   * 表现为文字重叠。允许换行后：宽的时候还是一行，窄的时候指标自动落到第二行。
+   */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px 14px;
   padding: 12px 14px;
   background: var(--bg-admin-input-alt);
   border: 1px solid var(--border-admin-input);
@@ -265,9 +275,10 @@ defineExpose({ reload: load })
 .model-item.active { border-color: var(--color-primary); background: var(--bg-card-active); }
 .model-item.enabled .version { color: var(--color-primary); }
 
-.mi-main { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1; }
+/* flex-basis 给下限：宁可行内换行，也不把自己压成 0 宽 */
+.mi-main { display: flex; flex-direction: column; gap: 5px; flex: 1 1 168px; min-width: 0; }
 
-.mi-title { display: flex; align-items: center; gap: 8px; }
+.mi-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 
 .radio {
   width: 13px;
@@ -279,14 +290,15 @@ defineExpose({ reload: load })
 }
 .radio.on { border-color: var(--color-primary); box-shadow: inset 0 0 0 3px var(--color-primary); }
 
-.version { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+/* 版本号是不可断的标识，别让它折成 "wildlife-" / "v1.0" 两行 */
+.version { font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
 
-.tag { font-size: 11px; padding: 1px 8px; border-radius: 9px; }
+.tag { font-size: 11px; padding: 1px 8px; border-radius: 9px; white-space: nowrap; }
 .tag.enabled { background: rgba(76, 175, 80, 0.18); color: #81c784; }
 .tag.disabled { background: rgba(120, 144, 156, 0.18); color: var(--text-dim); }
 
 .mi-sub { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.model-name { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+.model-name { font-size: 12px; color: var(--text-muted); flex-shrink: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .path {
   font-size: 11px;
@@ -297,7 +309,8 @@ defineExpose({ reload: load })
 }
 .mono { font-family: ui-monospace, Consolas, monospace; }
 
-.mi-metrics { display: flex; gap: 16px; flex-shrink: 0; }
+/* 指标自身也允许换行：指标多的时候不至于把所在行撑破 */
+.mi-metrics { display: flex; flex-wrap: wrap; gap: 6px 14px; flex: 0 1 auto; }
 
 .metric { display: flex; flex-direction: column; align-items: center; gap: 1px; }
 
@@ -306,11 +319,13 @@ defineExpose({ reload: load })
   font-weight: 600;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.metric-label { font-size: 10px; color: var(--text-dim); }
+.metric-label { font-size: 10px; color: var(--text-dim); white-space: nowrap; }
 
-.mi-actions { flex-shrink: 0; min-width: 68px; text-align: right; }
+/* 换行后按钮可能独占一行，margin-left: auto 保证它始终贴右 */
+.mi-actions { flex: 0 0 auto; min-width: 56px; margin-left: auto; text-align: right; }
 
 .btn-activate {
   padding: 4px 12px;
