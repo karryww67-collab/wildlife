@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 人工复核服务。
@@ -44,15 +45,18 @@ public class ReviewService {
     private final ReviewRecordRepository reviewRecordRepository;
     private final ImageRepository imageRepository;
     private final UserRepository userRepository;
+    private final ImageAvailabilityService imageAvailability;
 
     public ReviewService(DetectionResultRepository resultRepository,
                          ReviewRecordRepository reviewRecordRepository,
                          ImageRepository imageRepository,
-                         UserRepository userRepository) {
+                         UserRepository userRepository,
+                         ImageAvailabilityService imageAvailability) {
         this.resultRepository = resultRepository;
         this.reviewRecordRepository = reviewRecordRepository;
         this.imageRepository = imageRepository;
         this.userRepository = userRepository;
+        this.imageAvailability = imageAvailability;
     }
 
     // ── 待复核 ──────────────────────────────────────────────────────────────
@@ -62,12 +66,20 @@ public class ReviewService {
      *
      * 使用 MyBatis-Plus selectPage()，
      * 由 MySQL 直接完成 LIMIT/OFFSET。
+     *
+     * <p>每条结果都会带上 {@code imageAvailable}：原图物理文件没了的结果
+     * 在页面上看不到图，也就没有判据，前端据此禁用「复核」。
+     *
+     * @param hideMissing true = 直接从队列里排除"原图已丢失"的项。
+     *                    这一步在 SQL 里完成（{@code image_id NOT IN (...)}），
+     *                    所以 LIMIT/OFFSET 分页仍然正确 —— 不会出现"取 20 条筛掉 15 条"的页码错位。
      */
     public Map<String, Object> listPending(
             Long taskId,
             Double maxConfidence,
             int page,
-            int size) {
+            int size,
+            boolean hideMissing) {
         QueryWrapper<DetectionResult> wrapper =
                 new QueryWrapper<DetectionResult>()
                         .eq(
@@ -99,6 +111,12 @@ public class ReviewService {
                     maxConfidence
             );
         }
+
+        Set<Long> missingImages = imageAvailability.missingImageIds();
+        if (hideMissing && !missingImages.isEmpty()) {
+            wrapper.notIn("image_id", missingImages);
+        }
+
         wrapper.orderByAsc("confidence")
                 .orderByAsc("id");
 
@@ -116,6 +134,11 @@ public class ReviewService {
                         pageRequest,
                         wrapper
                 );
+
+        // 只对当前页（≤200 条）打可用性标记，不额外查文件
+        for (DetectionResult record : pageResult.getRecords()) {
+            record.setImageAvailable(!missingImages.contains(record.getImageId()));
+        }
 
         Map<String, Object> result =
                 new LinkedHashMap<>();
@@ -143,6 +166,18 @@ public class ReviewService {
         DetectionResult result = resultRepository.selectById(resultId);
         if (result == null) {
             return null;
+        }
+
+        /*
+         * 原图丢了就不能复核。
+         *
+         * 前端已经按 imageAvailable 禁用了按钮，但接口是公开契约，不能只靠 UI 兜底：
+         * 看不到图 = 没有判据，把这种结果标成"已确认 / 已修正"会直接污染
+         * 复核率、修正率这些指标，也会让后续模型迭代拿到假的标注。
+         */
+        if (!imageAvailability.isAvailable(result.getImageId())) {
+            throw new IllegalArgumentException(
+                    "该结果所属原图已从磁盘丢失，无法核对，不能提交复核（resultId=" + resultId + "）");
         }
 
         String normalized = normalizeAction(action);
@@ -187,9 +222,15 @@ public class ReviewService {
         return result;
     }
 
-    /** 批量复核：同一动作、同一修正物种。返回成功条数。 */
-    public int reviewBatch(List<Long> resultIds, String action, String correctedClass,
-                           String remark, String username) {
+    /**
+     * 批量复核：同一动作、同一修正物种。
+     *
+     * <p>原图已丢失的项**跳过而不是整批失败**：批量选择是页面行为，
+     * 队列里混进一条脏数据不该让另外 19 条一起提交不了。跳过条数会回给前端提示，
+     * 用户知道"我选了 20 条，实际生效 18 条，2 条原图丢了"。
+     */
+    public BatchReviewResult reviewBatch(List<Long> resultIds, String action, String correctedClass,
+                                         String remark, String username) {
         if (resultIds == null || resultIds.isEmpty()) {
             throw new IllegalArgumentException("resultIds 不能为空");
         }
@@ -199,12 +240,30 @@ public class ReviewService {
         }
 
         int reviewed = 0;
+        int skippedMissing = 0;
         for (Long resultId : resultIds) {
+            DetectionResult result = resultRepository.selectById(resultId);
+            if (result == null) {
+                continue;
+            }
+            // 这里比 review() 多查一次是刻意的：要能把"原图丢失"和"其它失败"分开计数
+            if (!imageAvailability.isAvailable(result.getImageId())) {
+                skippedMissing++;
+                continue;
+            }
             if (review(resultId, normalized, correctedClass, remark, username) != null) {
                 reviewed++;
             }
         }
-        return reviewed;
+
+        if (skippedMissing > 0) {
+            log.warn("批量复核跳过 {} 条原图已丢失的结果: {}", skippedMissing, resultIds);
+        }
+        return new BatchReviewResult(reviewed, skippedMissing);
+    }
+
+    /** 批量复核结果：{@code reviewed} 实际生效条数，{@code skippedMissing} 因原图丢失被跳过的条数。 */
+    public record BatchReviewResult(int reviewed, int skippedMissing) {
     }
 
     private String normalizeAction(String action) {
@@ -310,6 +369,18 @@ public class ReviewService {
         long rejected = results.stream().filter(r -> "REJECTED".equals(r.getReviewStatus())).count();
         long confirmed = results.stream().filter(r -> "CONFIRMED".equals(r.getReviewStatus())).count();
 
+        /*
+         * 待复核里有多少项是"原图已丢失、根本没法复核"的。
+         *
+         * pending 保持全量口径（库里确实是这么多条待复核），另给一个 pendingMissing 供前端
+         * 说明差额 —— 否则队列被过滤掉一部分后，用户会看到"统计说 2798、列表说 2000"而对不上账。
+         */
+        Set<Long> missingImages = imageAvailability.missingImageIds();
+        long pendingMissing = results.stream()
+                .filter(r -> r.getReviewStatus() == null || "PENDING".equals(r.getReviewStatus()))
+                .filter(r -> missingImages.contains(r.getImageId()))
+                .count();
+
         // 各原始物种被修正的次数 —— 用来判断模型在哪些物种上最容易认错
         Map<String, Integer> correctedByClass = new LinkedHashMap<>();
         List<Long> resultIds = results.stream().map(DetectionResult::getId).toList();
@@ -332,6 +403,7 @@ public class ReviewService {
         stats.put("total", total);
         stats.put("reviewed", reviewed);
         stats.put("pending", total - reviewed);
+        stats.put("pendingMissing", pendingMissing);
         stats.put("confirmed", confirmed);
         stats.put("corrected", corrected);
         stats.put("rejected", rejected);

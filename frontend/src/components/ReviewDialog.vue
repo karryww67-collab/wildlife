@@ -23,7 +23,11 @@
               :show-labels="true"
               max-height="52vh"
             />
-            <div v-else class="no-image">{{ previewPlaceholder }}</div>
+            <div v-else class="no-image" :class="{ lost: srcError === 'missing' }">
+              <span v-if="srcError === 'missing'" class="ni-icon">⚠</span>
+              <span>{{ previewPlaceholder }}</span>
+              <span v-if="srcError === 'missing' && image" class="ni-path">{{ image.filePath }}</span>
+            </div>
           </div>
 
           <!-- 右：复核表单 -->
@@ -62,6 +66,11 @@
               <p v-else class="tip">没有待复核的结果</p>
             </section>
 
+            <div v-if="imageMissing" class="message warn">
+              该结果所属原图已从磁盘丢失，无法核对，已禁止提交复核。请在存储侧恢复文件，
+              或在复核队列中过滤掉这类结果。
+            </div>
+
             <section class="block">
               <h4 class="block-title">复核动作</h4>
               <div class="action-group">
@@ -70,7 +79,7 @@
                   :key="opt.value"
                   class="action-btn"
                   :class="[opt.value.toLowerCase(), { active: action === opt.value }]"
-                  :disabled="submitting"
+                  :disabled="submitting || imageMissing"
                   @click="action = opt.value"
                 >
                   <span class="ab-icon">{{ opt.icon }}</span>
@@ -212,12 +221,26 @@ const primary = computed<DetectionResult | null>(() => targets.value[0] ?? null)
  * 后端 thumbnail 目前与 raw 同字节，故这不是额外带宽。
  */
 const displaySrc = ref('')
-const srcFailed = ref(false)
 
-/** 无图可预览 / 加载中 / 加载失败 —— 三者文案不同。 */
+/**
+ * 取图失败的原因。
+ *
+ * `missing` = 后端返回 404（`ImageController.serveFile()` 里 `Files.exists()` 为 false）：
+ * 库里还留着识别结果，但磁盘上的原图已经没了 —— 典型是 ai-engine/data 被清理/重建过。
+ * 这是**数据悬空**，不是网络抖动，重试也不会好，所以文案要和普通加载失败区分开；
+ * 更要紧的是：看不到图就等于没有任何判据，此时必须禁止提交复核，
+ * 否则会把「没看过图」的结果直接标成已确认 / 已修正。
+ */
+const srcError = ref<'' | 'missing' | 'other'>('')
+
+/** 确实有图像 id、但磁盘文件已丢失 —— 预览与提交都要拦。 */
+const imageMissing = computed(() => srcError.value === 'missing' && !!props.image?.id)
+
+/** 无图可预览 / 加载中 / 加载失败 —— 文案按原因区分。 */
 const previewPlaceholder = computed(() => {
   if (!props.image && !props.imageSrc) return '该结果未关联可预览图像'
-  if (srcFailed.value) return '图像加载失败'
+  if (srcError.value === 'missing') return '原图文件已丢失（磁盘上已不存在）'
+  if (srcError.value === 'other') return '图像加载失败'
   return '图像加载中...'
 })
 
@@ -234,7 +257,7 @@ function releaseDisplay() {
 async function resolveImage() {
   const seq = ++requestSeq
   releaseDisplay()
-  srcFailed.value = false
+  srcError.value = ''
 
   // 父组件明确传入的本地/blob/data/http 地址，直接使用
   const given = props.imageSrc
@@ -255,7 +278,9 @@ async function resolveImage() {
     displaySrc.value = url
   } catch (error) {
     if (seq !== requestSeq) return
-    srcFailed.value = true
+    const status = (error as { response?: { status?: number } })?.response?.status
+    // 404 = 后端按 file_path 找不到物理文件（悬空引用）；其余（401/500/超时）算普通失败
+    srcError.value = status === 404 ? 'missing' : 'other'
     console.error('加载审核图片失败:', error)
   }
 }
@@ -290,6 +315,8 @@ const actionOptions: Array<{ value: ReviewAction; label: string; hint: string; i
 ]
 
 const actionHint = computed(() => {
+  // 原图缺失优先提示：这条链路再往下走也没有意义
+  if (imageMissing.value) return '原图已丢失，无法核对，已禁止提交复核'
   if (action.value === 'CONFIRM') return '确认后该结果状态置为「已确认」'
   if (action.value === 'CORRECT') {
     if (!correctedClass.value.trim()) return '请先填写或选择正确的物种类别'
@@ -301,6 +328,8 @@ const actionHint = computed(() => {
 const canSubmit = computed(() => {
   if (submitting.value) return false
   if (!targets.value.length) return false
+  // 看不到原图就没有判据，任何复核动作都不成立（防止把未核对的结果标成已确认）
+  if (imageMissing.value) return false
   if (action.value === 'CORRECT' && !correctedClass.value.trim()) return false
   if (action.value === 'CORRECT' && !isBatch.value && correctedClass.value.trim() === primary.value?.className) {
     return false
@@ -359,7 +388,12 @@ async function submit() {
         correctedClass: payload.className,
         remark: payload.remark
       })
-      successMsg.value = `已复核 ${res.data.reviewed} 项`
+      // 后端会跳过原图已丢失的项（不让一条脏数据拖垮整批），跳过的条数要说清楚
+      const skipped = res.data.skippedMissing ?? 0
+      successMsg.value =
+        skipped > 0
+          ? `已复核 ${res.data.reviewed} 项，另有 ${skipped} 项因原图已丢失被跳过`
+          : `已复核 ${res.data.reviewed} 项`
     } else {
       await submitReview(resultIds[0], {
         action: payload.action,
@@ -457,10 +491,24 @@ async function submit() {
 }
 
 .no-image {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   color: var(--text-dim);
-  padding: 40px 0;
+  padding: 40px 16px;
   text-align: center;
+}
+
+/* 原图文件已丢失：用告警色，和"加载中/无图"区分开 */
+.no-image.lost { color: var(--text-warning); }
+.ni-icon { font-size: 22px; }
+.ni-path {
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-all;
+  max-width: 92%;
 }
 
 .pane-right { display: flex; flex-direction: column; gap: 16px; }
@@ -587,9 +635,14 @@ async function submit() {
 
 .tip { font-size: 12px; color: var(--text-dim); }
 
-.message { padding: 8px 12px; border-radius: 4px; font-size: 12px; }
+.message { padding: 8px 12px; border-radius: 4px; font-size: 12px; line-height: 1.6; }
 .message.success { background: rgba(46, 125, 50, 0.15); color: #81c784; border: 1px solid #2e7d32; }
 .message.error { background: rgba(198, 40, 40, 0.15); color: var(--text-danger); border: 1px solid #c62828; }
+.message.warn {
+  background: var(--bg-badge-warning);
+  color: var(--text-warning);
+  border: 1px solid var(--color-warning);
+}
 
 .dialog-foot {
   display: flex;

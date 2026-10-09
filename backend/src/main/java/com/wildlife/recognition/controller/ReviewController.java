@@ -35,13 +35,19 @@ public class ReviewController {
     /**
      * 待复核列表。
      * 默认按置信度升序（最不确定的排前面），可指定置信度上限，只拉出低置信结果。
+     *
+     * <p>返回的每条结果都带 {@code imageAvailable}：原图物理文件已丢失（悬空引用）时该值为 false，
+     * 页面上取图会 404、也就没有判据，前端据此禁用「复核」。
+     *
+     * @param hideMissing true 时把"原图已丢失"的项从队列里排除（在 SQL 里过滤，分页仍然正确）
      */
     @GetMapping("/pending")
     public ResponseEntity<?> pending(@RequestParam(required = false) Long taskId,
                                      @RequestParam(required = false) Double maxConfidence,
+                                     @RequestParam(defaultValue = "false") boolean hideMissing,
                                      @RequestParam(defaultValue = "1") int page,
                                      @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(reviewService.listPending(taskId, maxConfidence, page, size));
+        return ResponseEntity.ok(reviewService.listPending(taskId, maxConfidence, page, size, hideMissing));
     }
 
     /**
@@ -78,6 +84,9 @@ public class ReviewController {
     /**
      * 批量复核（同一动作、同一修正类别）。
      * 请求体：{"resultIds":[1,2,3],"action":"CONFIRM","remark":"批量确认"}
+     *
+     * <p>返回 {@code {"reviewed":N,"skippedMissing":M}}：M 是因原图已丢失被跳过的条数
+     * （批量选择是页面行为，混进一条脏数据不该让整批失败）。
      */
     @PostMapping("/batch")
     public ResponseEntity<?> reviewBatch(@RequestBody Map<String, Object> body,
@@ -102,8 +111,12 @@ public class ReviewController {
         String remark = body.get("remark") == null ? null : String.valueOf(body.get("remark"));
 
         try {
-            int reviewed = reviewService.reviewBatch(resultIds, action, correctedClass, remark, username);
-            return ResponseEntity.ok(Map.of("reviewed", reviewed));
+            ReviewService.BatchReviewResult result =
+                    reviewService.reviewBatch(resultIds, action, correctedClass, remark, username);
+            return ResponseEntity.ok(Map.of(
+                    "reviewed", result.reviewed(),
+                    "skippedMissing", result.skippedMissing()
+            ));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

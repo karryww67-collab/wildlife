@@ -15,8 +15,10 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -29,7 +31,7 @@ import static org.mockito.Mockito.when;
  *
  * 两个方法都改成了真分页，但返回形状故意不同，测试要分别盯住：
  * <ul>
- *   <li>{@code listPending(taskId, maxConfidence, page, size)} —— 待人工复核的低置信度结果，
+ *   <li>{@code listPending(taskId, maxConfidence, page, size, hideMissing)} —— 待人工复核的低置信度结果，
  *       返回手写 5 键 Map；筛选条件是 {@code review_status='PENDING'} + {@code confidence <= maxConfidence}，
  *       按置信度升序（最不可信的排最前）；</li>
  *   <li>{@code listRecords(taskId, page, size)} —— 复核记录，接口契约未变，
@@ -38,12 +40,18 @@ import static org.mockito.Mockito.when;
  *
  * 两处 taskId 都要求走数据库子查询，本类用 {@code verifyNoInteractions(imageRepository)}
  * 证明没有把 imageId 拉进 Java 内存。
+ *
+ * <p>⑩ 起 {@code listPending} 多了一个 {@code hideMissing} 开关与 {@code imageAvailable}
+ * 标记，可用性判断被抽到 {@link ImageAvailabilityService}。这里把它 mock 掉：
+ * 一是为了让上面那条「不碰 imageRepository」的断言依然成立（真实现要遍历图像表判存），
+ * 二是让"哪些图算丢失"由用例自己指定，测试不依赖本机磁盘。
  */
 class ReviewServiceTest {
 
     private DetectionResultRepository resultRepository;
     private ReviewRecordRepository reviewRecordRepository;
     private ImageRepository imageRepository;
+    private ImageAvailabilityService imageAvailability;
     private ReviewService reviewService;
 
     @BeforeEach
@@ -53,8 +61,13 @@ class ReviewServiceTest {
         imageRepository = mock(ImageRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
 
+        // 默认：没有任何图丢失，且所有结果都可复核（review() 的守卫放行）
+        imageAvailability = mock(ImageAvailabilityService.class);
+        when(imageAvailability.missingImageIds()).thenReturn(Set.of());
+        when(imageAvailability.isAvailable(any())).thenReturn(true);
+
         reviewService = new ReviewService(resultRepository, reviewRecordRepository,
-                imageRepository, userRepository);
+                imageRepository, userRepository, imageAvailability);
     }
 
     private void stubPendingPage(long total, List<DetectionResult> records) {
@@ -122,7 +135,7 @@ class ReviewServiceTest {
                 lowConfidenceResult(2L, 2049L, 0.33));
         stubPendingPage(9L, records);
 
-        Map<String, Object> map = reviewService.listPending(7L, 0.6, 1, 10);
+        Map<String, Object> map = reviewService.listPending(7L, 0.6, 1, 10, false);
 
         Page<DetectionResult> pageRequest = capturePendingPageRequest();
         assertThat(pageRequest.getCurrent()).isEqualTo(1L);
@@ -152,7 +165,7 @@ class ReviewServiceTest {
     void listPending_withoutTaskId_skipsTaskSubquery() {
         stubPendingPage(0L, List.of());
 
-        reviewService.listPending(null, null, 1, 20);
+        reviewService.listPending(null, null, 1, 20, false);
 
         QueryWrapper<DetectionResult> wrapper = capturePendingWrapper();
         String sql = wrapper.getCustomSqlSegment();
@@ -170,7 +183,7 @@ class ReviewServiceTest {
     void listPending_clampsPageAndSize() {
         stubPendingPage(0L, List.of());
 
-        reviewService.listPending(7L, 0.5, 0, 0);
+        reviewService.listPending(7L, 0.5, 0, 0, false);
 
         Page<DetectionResult> pageRequest = capturePendingPageRequest();
         assertThat(pageRequest.getCurrent()).isEqualTo(1L);
@@ -206,10 +219,79 @@ class ReviewServiceTest {
         stubPendingPage(0L, List.of());
         stubRecordPage(0L, List.of());
 
-        reviewService.listPending(7L, 0.5, 1, 20);
+        reviewService.listPending(7L, 0.5, 1, 20, false);
         reviewService.listRecords(7L, 1, 20);
 
         verify(resultRepository, never()).selectList(any());
         verify(reviewRecordRepository, never()).selectList(any());
+    }
+
+    // ── ⑩ 原图已丢失（悬空引用）不得进入复核链路 ──────────────────────────────
+
+    @Test
+    @DisplayName("listPending(hideMissing=true)：缺失项在 SQL 里 NOT IN 掉，当前页逐条打 imageAvailable")
+    void listPending_hideMissing_filtersInSql_andMarksAvailability() {
+        DetectionResult ok = lowConfidenceResult(1L, 2048L, 0.21);
+        DetectionResult lost = lowConfidenceResult(2L, 9999L, 0.33);
+        stubPendingPage(2L, List.of(ok, lost));
+        when(imageAvailability.missingImageIds()).thenReturn(Set.of(9999L));
+
+        reviewService.listPending(null, null, 1, 20, true);
+
+        QueryWrapper<DetectionResult> wrapper = capturePendingWrapper();
+        assertThat(wrapper.getCustomSqlSegment())
+                .as("过滤必须落在 SQL 里 —— 在 Java 里「取一页再筛掉几条」会让页码错位")
+                .contains("NOT IN");
+
+        assertThat(ok.getImageAvailable()).as("在盘上的图标记为可用").isTrue();
+        assertThat(lost.getImageAvailable()).as("文件已丢失的图标记为不可用").isFalse();
+    }
+
+    @Test
+    @DisplayName("listPending(hideMissing=false)：仍返回缺失项，但同样标成不可用")
+    void listPending_withoutHideMissing_stillMarksAvailability() {
+        DetectionResult lost = lowConfidenceResult(2L, 9999L, 0.33);
+        stubPendingPage(1L, List.of(lost));
+        when(imageAvailability.missingImageIds()).thenReturn(Set.of(9999L));
+
+        reviewService.listPending(null, null, 1, 20, false);
+
+        QueryWrapper<DetectionResult> wrapper = capturePendingWrapper();
+        assertThat(wrapper.getCustomSqlSegment()).doesNotContain("NOT IN");
+        assertThat(lost.getImageAvailable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("review：原图已丢失的结果必须拒绝 —— 看不到图就没有判据")
+    void review_rejectsWhenOriginalImageMissing() {
+        DetectionResult lost = lowConfidenceResult(2L, 9999L, 0.33);
+        when(resultRepository.selectById(2L)).thenReturn(lost);
+        when(imageAvailability.isAvailable(9999L)).thenReturn(false);
+
+        assertThatThrownBy(() -> reviewService.review(2L, "CONFIRM", null, null, "admin"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("原图已从磁盘丢失");
+
+        // 关键：既没改结果状态，也没留下复核记录。
+        // any() 必须带类型：BaseMapper 里 updateById 有 T 与 Collection<T> 两个重载，
+        // 裸 any() 会让编译器无法在两者间选择。
+        verify(resultRepository, never()).updateById(any(DetectionResult.class));
+        verifyNoInteractions(reviewRecordRepository);
+    }
+
+    @Test
+    @DisplayName("reviewBatch：混进原图丢失的项时跳过并计数，不让整批一起失败")
+    void reviewBatch_skipsMissingImageItems() {
+        DetectionResult ok = lowConfidenceResult(1L, 2048L, 0.21);
+        DetectionResult lost = lowConfidenceResult(2L, 9999L, 0.33);
+        when(resultRepository.selectById(1L)).thenReturn(ok);
+        when(resultRepository.selectById(2L)).thenReturn(lost);
+        when(imageAvailability.isAvailable(9999L)).thenReturn(false);
+
+        ReviewService.BatchReviewResult result =
+                reviewService.reviewBatch(List.of(1L, 2L), "CONFIRM", null, null, "admin");
+
+        assertThat(result.reviewed()).as("可复核的那条照常生效").isEqualTo(1);
+        assertThat(result.skippedMissing()).as("丢失的那条被跳过而不是让整批 400").isEqualTo(1);
     }
 }
