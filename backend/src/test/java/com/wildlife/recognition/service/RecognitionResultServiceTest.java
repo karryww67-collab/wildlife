@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.wildlife.recognition.entity.DetectionResult;
 import com.wildlife.recognition.repository.DetectionResultRepository;
 import com.wildlife.recognition.repository.ImageRepository;
+import com.wildlife.recognition.repository.ModelVersionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,9 @@ import static org.mockito.Mockito.when;
  *   <li><b>confidence / className / reviewStatus</b>：条件不能被分页改造弄丢。</li>
  * </ul>
  *
- * 注意参数顺序：{@code list(taskId, imageId, className, minConfidence, reviewStatus, page, size)}。
+ * 注意参数顺序：{@code list(taskId, imageId, className, minConfidence, reviewStatus,
+ * startTime, endTime, page, size)} —— 时间区间排在 page/size 之前，
+ * 这两个 {@code LocalDateTime} 很容易漏掉。
  */
 class RecognitionResultServiceTest {
 
@@ -45,7 +48,8 @@ class RecognitionResultServiceTest {
     void setUp() {
         resultRepository = mock(DetectionResultRepository.class);
         imageRepository = mock(ImageRepository.class);
-        resultService = new RecognitionResultService(resultRepository, imageRepository);
+        resultService = new RecognitionResultService(resultRepository, imageRepository,
+                mock(ModelVersionRepository.class));
     }
 
     private void stubSelectPage(long total, List<DetectionResult> records) {
@@ -85,7 +89,7 @@ class RecognitionResultServiceTest {
     void list_byTaskId_usesDatabaseSubquery_withoutLoadingImageIds() {
         stubSelectPage(12L, List.of(result(1L, 2048L)));
 
-        Map<String, Object> map = resultService.list(7L, null, null, null, null, 1, 10);
+        Map<String, Object> map = resultService.list(7L, null, null, null, null, null, null, 1, 10);
 
         QueryWrapper<DetectionResult> wrapper = captureWrapper();
         String sql = wrapper.getCustomSqlSegment();
@@ -107,7 +111,7 @@ class RecognitionResultServiceTest {
     void list_byImageId_prefersEqualityOverTaskSubquery() {
         stubSelectPage(3L, List.of(result(1L, 2048L)));
 
-        resultService.list(7L, 2048L, null, null, null, 1, 10);
+        resultService.list(7L, 2048L, null, null, null, null, null, 1, 10);
 
         QueryWrapper<DetectionResult> wrapper = captureWrapper();
         String sql = wrapper.getCustomSqlSegment();
@@ -123,7 +127,7 @@ class RecognitionResultServiceTest {
     void list_keepsClassConfidenceAndReviewStatusFilters() {
         stubSelectPage(0L, List.of());
 
-        resultService.list(null, null, "麂", 0.5, "PENDING", 1, 20);
+        resultService.list(null, null, "麂", 0.5, "PENDING", null, null, 1, 20);
 
         QueryWrapper<DetectionResult> wrapper = captureWrapper();
         String sql = wrapper.getCustomSqlSegment();
@@ -139,7 +143,7 @@ class RecognitionResultServiceTest {
     void list_clampsPageAndSize() {
         stubSelectPage(0L, List.of());
 
-        Map<String, Object> map = resultService.list(null, null, null, null, null, -3, 100000);
+        Map<String, Object> map = resultService.list(null, null, null, null, null, null, null, -3, 100000);
 
         Page<DetectionResult> pageRequest = capturePageRequest();
         assertThat(pageRequest.getCurrent()).isEqualTo(1L);
@@ -153,7 +157,7 @@ class RecognitionResultServiceTest {
     void list_usesSelectPageNotSelectList() {
         stubSelectPage(0L, List.of());
 
-        resultService.list(7L, null, null, null, null, 2, 20);
+        resultService.list(7L, null, null, null, null, null, null, 2, 20);
 
         verify(resultRepository).selectPage(any(), any());
         verify(resultRepository, never()).selectList(any());
