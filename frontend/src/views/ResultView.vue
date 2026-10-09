@@ -154,10 +154,34 @@
           </tbody>
         </table>
 
-        <footer v-if="total > size" class="pager">
-          <button class="btn-mini" :disabled="page <= 1" @click="turnPage(-1)">上一页</button>
-          <span class="pager-text">第 {{ page }} / {{ totalPages }} 页</span>
-          <button class="btn-mini" :disabled="page >= totalPages" @click="turnPage(1)">下一页</button>
+        <footer v-if="total > 0" class="pager">
+          <div class="pager-row">
+            <button class="btn-mini" :disabled="page <= 1" @click="turnPage(-1)">上一页</button>
+            <span class="pager-text">第 {{ page }} / {{ totalPages }} 页</span>
+            <button class="btn-mini" :disabled="page >= totalPages" @click="turnPage(1)">下一页</button>
+          </div>
+          <div class="pager-jump">
+            <span class="pager-text">跳至</span>
+            <input
+              v-model.number="jumpTo"
+              class="pager-input"
+              type="number"
+              min="1"
+              :max="totalPages"
+              placeholder="页码"
+              @keyup.enter="goToPage()"
+            />
+            <span class="pager-text">页</span>
+            <button class="btn-mini" :disabled="!canJump" @click="goToPage()">跳转</button>
+            <span class="pager-text pager-hint">共 {{ total }} 条</span>
+            <label class="pager-size">
+              <span class="pager-text">每页</span>
+              <select v-model.number="size" @change="changeSize">
+                <option v-for="opt in SIZE_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+              </select>
+              <span class="pager-text">条</span>
+            </label>
+          </div>
         </footer>
       </section>
 
@@ -241,7 +265,11 @@ const exporting = ref(false)
 const rows = ref<DetectionResult[]>([])
 const total = ref(0)
 const page = ref(1)
-const size = 20
+/** 每页条数。后端 MybatisPlusConfig.maxLimit = 200 —— 单次接口最多返回 200 条，
+/** 所以选项上限就是 200：再往上后端会截断，而前端仍按请求值算总页数，页码就对不上了。
+ */
+const SIZE_OPTIONS = [20, 50, 100, 200]
+const size = ref(20)
 
 const tasks = ref<RecognitionTask[]>([])
 const speciesOptions = ref<string[]>([])
@@ -268,7 +296,7 @@ const reviewVisible = ref(false)
 const reviewTarget = ref<DetectionResult | null>(null)
 const reviewBatch = ref<DetectionResult[]>([])
 
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size.value)))
 
 const pageAvgConfidence = computed(() => {
   if (!rows.value.length) return 0
@@ -340,7 +368,7 @@ async function loadResults() {
       startTime: filters.startTime || undefined,
       endTime: filters.endTime || undefined,
       page: page.value,
-      size
+      size: size.value
     })
     rows.value = res.data?.list ?? []
     total.value = res.data?.total ?? 0
@@ -371,6 +399,33 @@ function resetFilters() {
 
 function turnPage(delta: number) {
   page.value = Math.max(1, Math.min(totalPages.value, page.value + delta))
+  loadResults()
+}
+
+/** 跳页输入框的值。用 ref<number | string> 是为了允许清空后显示占位符。 */
+const jumpTo = ref<number | string>('')
+/** 只接受落在 [1, totalPages] 内的整数，且不是当前页 —— 否则按钮置灰。 */
+const canJump = computed(() => {
+  const n = Number(jumpTo.value)
+  return (
+    Number.isInteger(n) &&
+    n >= 1 &&
+    n <= totalPages.value &&
+    n !== page.value
+  )
+})
+
+function goToPage() {
+  if (!canJump.value) return
+  page.value = Number(jumpTo.value)
+  jumpTo.value = ''
+  loadResults()
+}
+
+/** 改每页条数后回第 1 页 —— 否则留在原页码会跳过或重复数据。 */
+function changeSize() {
+  page.value = 1
+  jumpTo.value = ''
   loadResults()
 }
 
@@ -793,13 +848,44 @@ select:focus { border-color: var(--color-admin-focus); }
 /* ── 分页 ── */
 .pager {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  gap: 8px;
   padding: 12px;
   border-top: 1px solid var(--border-admin-table);
 }
+.pager-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.pager-jump {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
 .pager-text { font-size: 12px; color: var(--text-muted); }
+.pager-hint { opacity: 0.75; }
+.pager-input {
+  width: 72px;
+  text-align: center;
+}
+/* 数字输入框的上下箭头在窄宽度下会挤掉数字，隐藏之；仍可用键盘上下键调值 */
+.pager-input::-webkit-outer-spin-button,
+.pager-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pager-input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+.pager-size {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+}
+.pager-size select { width: auto; }
 
 @media (max-width: 1440px) {
   .result-body { grid-template-columns: 1fr; }
