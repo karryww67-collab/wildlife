@@ -5,7 +5,7 @@
  *   2) cartoon —— 卡通动物：明亮通透的春绿 + 天空蓝/蜜桃黄点缀，呼应登录页插画
  *
  * 约定：
- *   - 两套主题各 77 个变量，名字完全对称 → 改一个主题必须同步改另一个，
+ *   - 两套主题各 69 个变量，名字完全对称 → 改一个主题必须同步改另一个，
  *     否则会静默回落到 :root（forest）的值，出现"半套主题"。
  *   - 品牌识别色 #98FF98 只用于大面积装饰；承担交互（按钮/链接/进度/激活态）
  *     的是各主题的 --color-primary（比品牌绿深两档，保证白字可读）。
@@ -40,10 +40,8 @@ html * {
   --bg-badge-success: rgba(30, 122, 82, 0.12);
   --bg-badge-purple: rgba(110, 95, 175, 0.12);
   --bg-badge-danger-alt: rgba(190, 84, 74, 0.16);
-  --bg-event-item: #F3FAF5;
-  --bg-event-danger: rgba(190, 84, 74, 0.06);
-  --bg-event-warning: rgba(190, 140, 50, 0.07);
-  --bg-liability-item: rgba(30, 122, 82, 0.05);
+  --bg-badge-muted: #F3FAF5;
+  --bg-info-block: rgba(30, 122, 82, 0.05);
 
   /* 边框 */
   --border-primary: #D5E7DC;
@@ -62,15 +60,10 @@ html * {
   --color-danger: #BE544A;
   --color-warning: #BE8C32;
   --color-success: #1E7A52;
-  --color-collision: #B84A6B;
-  --color-still: #7E5A9C;
-  --color-online: #1E7A52;
-  --color-offline: #93AC9F;
+  --color-canceled: #93AC9F;
   --color-nav-active-bg: #D9F0E2;
   --color-nav-active-text: #176044;
   --color-ws-dot-off: #B2C5B8;
-  --color-party-orange: #BE7331;
-  --color-task-hash: #22747A;
 
   /* 文字 */
   --text-primary: #12342A;
@@ -88,7 +81,6 @@ html * {
   --shadow-glow: none;
 
   /* 扫描线（浅色主题下隐藏） */
-  --scan-line-color: transparent;
 
   /* 标题渐变 */
   --title-gradient-from: #1E7A52;
@@ -140,10 +132,8 @@ html * {
   --bg-badge-success: rgba(47, 191, 124, 0.14);
   --bg-badge-purple: rgba(167, 139, 250, 0.16);
   --bg-badge-danger-alt: rgba(255, 107, 107, 0.2);
-  --bg-event-item: #F2FDF7;
-  --bg-event-danger: rgba(255, 107, 107, 0.07);
-  --bg-event-warning: rgba(255, 178, 60, 0.09);
-  --bg-liability-item: rgba(47, 191, 124, 0.06);
+  --bg-badge-muted: #F2FDF7;
+  --bg-info-block: rgba(47, 191, 124, 0.06);
 
   /* 边框 */
   --border-primary: #D3EFE1;
@@ -162,15 +152,10 @@ html * {
   --color-danger: #FF6B6B;
   --color-warning: #FFB23C;
   --color-success: #2FBF7C;
-  --color-collision: #FF7BA9;
-  --color-still: #B98BE8;
-  --color-online: #2FBF7C;
-  --color-offline: #A8C6B8;
+  --color-canceled: #A8C6B8;
   --color-nav-active-bg: #D6F8E6;
   --color-nav-active-text: #178A52;
   --color-ws-dot-off: #C1D5CB;
-  --color-party-orange: #FF9152;
-  --color-task-hash: #3BB8C4;
 
   /* 文字 */
   --text-primary: #173D2C;
@@ -188,7 +173,6 @@ html * {
   --shadow-glow: none;
 
   /* 扫描线（浅色主题下隐藏） */
-  --scan-line-color: transparent;
 
   /* 标题渐变：绿 → 天空蓝 → 蜜桃黄，做出卡通插画感 */
   --title-gradient-from: #2FBF7C;

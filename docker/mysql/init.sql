@@ -49,9 +49,9 @@ SET NAMES utf8mb4;
 -- ============================================================================
 -- 0. 清理历史表
 --
--- 「滑雪事故定责系统」时期的表已全部废弃 —— 本系统不再有摄像头、视频、
--- 落水告警、SOS 求救与人员追踪等概念，统一在此删除，保证脚本可重复执行
--- 且不残留旧结构。
+-- 早期版本遗留的表在此统一删除，保证脚本可重复执行且不残留旧结构。
+-- 本系统只保留下面定义的用户、模型版本、识别任务、识别图像、
+-- 检测结果与复核记录六张表。
 --
 -- users 表不删，用户数据不丢。
 --
@@ -71,17 +71,6 @@ DROP TABLE IF EXISTS recognition_task;
 DROP TABLE IF EXISTS recognition_tasks;
 DROP TABLE IF EXISTS model_version;
 DROP TABLE IF EXISTS model_versions;
-
--- 以下为滑雪版遗留表，全部废弃
-DROP TABLE IF EXISTS tracking_task_cameras;
-DROP TABLE IF EXISTS tracking_results;
-DROP TABLE IF EXISTS tracking_persons;
-DROP TABLE IF EXISTS tracking_tasks;
-DROP TABLE IF EXISTS alerts;
-DROP TABLE IF EXISTS sos_record;
-DROP TABLE IF EXISTS tasks;
-DROP TABLE IF EXISTS videos;
-DROP TABLE IF EXISTS cameras;
 
 SET FOREIGN_KEY_CHECKS = 1;
 

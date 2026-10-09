@@ -330,11 +330,11 @@ onBeforeUnmount(() => {
   border-radius: 10px;
   font-weight: 500;
 }
-.status-badge.pending { background: var(--bg-event-item); color: var(--text-muted); }
+.status-badge.pending { background: var(--bg-badge-muted); color: var(--text-muted); }
 .status-badge.processing { background: var(--bg-card-active); color: var(--color-primary); }
 .status-badge.completed { background: var(--bg-badge-success); color: var(--color-success); }
 .status-badge.failed { background: var(--bg-badge-danger); color: var(--text-danger); }
-.status-badge.canceled { background: var(--bg-event-item); color: var(--text-dim); }
+.status-badge.canceled { background: var(--bg-badge-muted); color: var(--text-dim); }
 
 .bar-row { display: flex; align-items: center; }
 
@@ -358,7 +358,7 @@ onBeforeUnmount(() => {
 }
 .bar-fill.completed { background: var(--color-success); }
 .bar-fill.failed { background: var(--color-danger); }
-.bar-fill.canceled { background: var(--color-offline); }
+.bar-fill.canceled { background: var(--color-canceled); }
 
 .stats {
   display: grid;

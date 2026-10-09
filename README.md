@@ -187,16 +187,24 @@ cd frontend && npm install && npm run dev
 
 数据来源、许可、引用格式与实测数字详见 [`数据集来源与引用.md`](数据集来源与引用.md)。
 
-### 8.1 当前权重状态：**页面显示的版本 ≠ 实际生效的权重**
+### 8.1 当前权重状态（**微调权重已落地**）
 
-三个正式版本目录（`wildlife-v1.0` / `v1.1` / `v2.0`）**都只有 `classes.txt` 与 `meta.json`，没有 `best.pt`**。
-引擎因此回退到 `YOLO_MODEL_PATH` 指向的 `models/test-coco-yolo11n/best.pt`（COCO 公开权重）。
+> **本节已于 2026-10-09 整体重写。** 早先版本描述的是权重落地之前的「回退」状态，现已被取代。
 
-> 微调训练在魔搭 A10 上进行（`ai-engine/scripts/魔搭Notebook训练指南.md`）。
-> 训练产出 `best.pt` 后按 §8.3 的流程放入版本目录、评测、登记，
-> 回退告警即消失。在权重落地前，本节描述的「回退」状态依然成立。
+`wildlife-v1.0` 目录**已包含微调权重 `best.pt`**（19,184,858 B，md5 `30fa9b6644e0a79a89f0940fe5429bd3`），引擎正常加载它、**不再回退**到 COCO 权重。
 
-这件事原先只出现在启动日志里，页面上完全看不出来 —— 于是"当前模型：wildlife-v1.0"和实际跑的权重是两回事。现在它被显式暴露：
+| 版本目录 | `best.pt` | `classes.txt` | 状态 |
+|---|---|---|---|
+| `wildlife-v1.0` | ✅ 19,184,858 B | 19 类 | **当前启用** |
+| `wildlife-v1.1` | ❌ 无 | 30 类 | 占位，未训练 |
+| `wildlife-v2.0` | ❌ 无 | 45 类 | 占位，未训练 |
+| `test-coco-yolo11n` | ✅ 5,613,764 B | 80 类（COCO） | 测试用，非正式版本 |
+
+> ⚠️ `v1.1` / `v2.0` 的 `classes.txt` 仍是**系统设计阶段的占位声明**，与实际训练数据（§8.0 的 19 类）不一致，且没有对应权重 —— 启用前必须先训练并重新评测。
+> `v1.0` 则**三处已逐字节对齐**（214 字节，md5 `9e9efee08d04c20772708eb02522d13d`）：
+> `ai-engine/models/wildlife-v1.0/classes.txt` = `meta.json` 的 `classConfig` = `model_version.class_config`（含 `docker/mysql/init.sql` 的种子值）。
+
+回退检测机制仍然保留 —— 换新版本、权重缺失时会重新触发：
 
 ```bash
 # 引擎侧自检（经 nginx 反代，从前端入口即可访问）
@@ -206,19 +214,22 @@ curl "http://localhost:9095/ai/model/status?version=wildlife-v1.0"
 docker exec wildlife-ai-engine python check_weights.py --all
 ```
 
-`GET /ai/model/status` 返回的 `usingFallback` 为真即表示发生了回退，`effectiveWeight.md5` 是**实际加载**的那份权重的指纹，`issues` 逐条说明原因。「模型管理」页会在这种情况下显示醒目告警条，并列出该版本声明要识别的类别。
+`GET /ai/model/status` 返回的 `usingFallback` 为真即表示发生了回退，`effectiveWeight.md5` 是**实际加载**的那份权重的指纹，`issues` 逐条说明原因。「模型管理」页会显示告警条，并列出该版本声明要识别的类别。
 
-各版本声明的类别（来自各自的 `classes.txt`）：**v1.0 20 类、v1.1 30 类、v2.0 45 类**，均为中文物种名（大熊猫、雪豹、川金丝猴、羚牛、小熊猫、豹猫、野猪 …）。
+### 8.2 指标可核验（**已验证**）
 
-> ⚠️ 这些类别表是**系统设计阶段的占位声明**，与实际训练数据（§8.0 的 19 类合并集）不一致。
-> 微调权重落地时应同步把 `classes.txt` 与 `model_version.class_config` 对齐为
-> 实际训练用的 19 类（`evaluate.py --write-classes` 会写出与权重一致的那份）。
+`wildlife-v1.0/meta.json` 的指标已由 `scripts/evaluate.py` 实测产出，`metricsVerified` 为 **`true`**，并附完整溯源：
 
-### 8.2 指标的「实测」与「记录」
+| 指标 | 值 |
+|---|---|
+| Precision | 0.8495 |
+| Recall | 0.7340 |
+| mAP50 | **0.8106** |
+| mAP50-95 | **0.6357** |
 
-`meta.json` 里的 mAP / Precision / Recall 目前**没有权重与训练日志可佐证**（权重不存在，也没有可复现的评测记录），因此都标了 `"metricsVerified": false`。这类指标**不会被登记进库** —— `scripts/register_model.py` 会把未验证的指标字段置空。页面上留空，好过显示一个查不到出处的数字。
+溯源字段：`weightsMd5` `30fa9b6644e0a79a89f0940fe5429bd3`、`weightsSizeBytes` 19184858、`datasetSha256` `faae4bf1a5cee992a22ec6238f874d857dba30c82631ca6d5c7ae170f6ca8781`、`evaluatedAt` `2026-10-08T17:45:42+08:00`、`command`（完整复现命令）、`environment`（ultralytics 8.4.174 / torch 2.13.0+cu130 / NVIDIA A10 / 8 核）。**任何人拿同一份 `best.pt` 与同一份 `data.yaml` 都能复现出同样的数字。**
 
-要得到**可核验**的指标，跑 `scripts/evaluate.py`：它把权重 md5、`data.yaml` 的 sha256、评测时间、复现命令、ultralytics/torch 版本一起写进 `meta.json`，并把 `metricsVerified` 置为 `true`。任何人拿着同一个 `best.pt` 与同一份数据都能复现出同样的数字。
+未验证的指标**不会被登记进库** —— `scripts/register_model.py` 会把未验证的指标字段置空，页面上留空好过显示一个查不到出处的数字。（`v1.1` / `v2.0` 仍是这种状态。）
 
 ### 8.3 训练链路（数据需自备）
 
@@ -315,8 +326,13 @@ python prepare_dataset.py --dataset data/combined --classes data/combined/classe
 口径：三种批大小处理**完全相同的一整池 24 张图**——`batch=1` 分成 24 次单张推理、`batch=3` 分成 8 次、`batch=8` 分成 3 次，因此单张耗时可直接横向比较。每种预热 1 轮、计时 3 轮取中位数，重复测量方差很小（`batch=1` 三次为 2345.4 / 2337.5 / 2370.1 ms）。
 
 ```bash
-python scripts/bench_inference.py --weights /models/wildlife-v1.0/best.pt \
-    --images /app/tests --batches 1 3 8 --repeats 3 --imgsz 640
+# tests/ 在 ai-engine/.dockerignore 里，不会进镜像，需先拷进容器
+docker cp ai-engine/tests/deer.jpg wildlife-ai-engine:/tmp/tests/
+docker cp ai-engine/tests/elephant.jpg wildlife-ai-engine:/tmp/tests/
+docker cp ai-engine/tests/tiger.jpg wildlife-ai-engine:/tmp/tests/
+docker exec wildlife-ai-engine python scripts/bench_inference.py \
+    --weights /models/wildlife-v1.0/best.pt \
+    --images /tmp/tests --batches 1 3 8 --repeats 3 --imgsz 640
 ```
 
 > **本节早先的数据已作废（2026-10-09 重测）**。原先记载"`batch=1` 为 508~768 ms/张、`batch=3` 为 74.6~75.7 ms/张，约 7~10 倍差距"，并据此给出"CPU 部署下调大 `BATCH_SIZE` 是性价比最高的优化"。该结论**无法复现**：用同一份测试图，无论加载自训练 yolo11s 还是当时实际生效的 COCO yolo11n，`batch=1` 都只要 53~98 ms，从未出现 508~768 ms。
@@ -351,7 +367,7 @@ python scripts/bench_inference.py --weights /models/wildlife-v1.0/best.pt \
 
 ## 九、已知限制
 
-1. **微调权重待落地**（**已解决**）。微调权重 `wildlife-v1.0/best.pt` 已训练完成、落地并启用（mAP50 0.8106 / mAP50-95 0.6357），端到端识别已验证。以下保留建库早期 COCO 权重时期的现象描述，作为历史记录。训练数据链路已跑通
+1. ~~微调权重待落地~~（**已解决**）。微调权重 `wildlife-v1.0/best.pt` 已训练完成、落地并启用（mAP50 0.8106 / mAP50-95 0.6357），端到端识别已验证，训练数据链路已跑通（详见第八节）。
 2. **超大任务未经压测**。实测最大任务为 **1,200 张**（2026-10-08 走真实接口的端到端实测：上传 42.1 张/秒、端到端 133.53 ms/张、1,200 成功 0 失败、检出框计数可分毫核对；脚本与原始结果见 `ai-engine/scripts/scale_test.py` 与 `ai-engine/scripts/scale_result_1200.json`）。**10 万张级别仍未做加载测试**：按该速率线性外推约 3.7 小时纯推理、约 40 分钟上传，**是外推不是实测**。任务创建按 `ATTACH_BATCH_SIZE=1000` 分批 UPDATE（不是单条 `IN (...)`），10 万个 ID 的请求体约 700 KB，该路径未实测；故障注入、多 worker 同样未验证。
 3. **前端类型检查未过**。`npm run build`（= `vue-tsc && vite build`）会被类型错误拦住，故 `frontend/Dockerfile` 里用 `npx vite build` 绕过；类型层问题不影响运行，但修完后应改回标准命令。
 4. **REVIEWER 角色实际退化为 USER**。`AuthService.normalizeRole()` 只归一出 `ADMIN` 与 `USER` 两种角色，库里存的 `REVIEWER` 会被降为 `USER`。用户管理页仍可创建 REVIEWER 账号，但该账号的实际权限与只读用户完全相同。要让它真正生效，需先改归一化逻辑，再把「提交复核结论」之类的动作单独收口。

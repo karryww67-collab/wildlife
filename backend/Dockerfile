@@ -13,7 +13,8 @@ COPY pom.xml .
 RUN mvn dependency:resolve -B
 
 COPY src ./src
-# 说明：src/test 下现有 5 个测试类都能正常编译（滑雪期的测试已移出到归档目录）。
+# 说明：src/test 下现有 5 个测试类（TaskService / RedisSubscriberService /
+# ReviewService / ImageService / RecognitionResultService）都能正常编译。
 # 这里仍用 -Dmaven.test.skip=true 是为了让镜像构建更快、且不依赖测试环境；
 # 若要把单测当作构建门禁，把本行改成 `mvn package -B` 即可。
 RUN mvn package -Dmaven.test.skip=true -B

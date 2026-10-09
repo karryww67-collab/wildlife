@@ -27,10 +27,10 @@
         <span class="stat-label">已复核</span>
       </div>
       <div class="stat-card">
-        <span class="stat-value warn">{{ stats.pending }}</span>
-        <span class="stat-label">待复核</span>
+        <span class="stat-value warn">{{ actionablePending }}</span>
+        <span class="stat-label">待复核（可复核）</span>
         <span v-if="stats.pendingMissing > 0" class="stat-note">
-          其中 {{ stats.pendingMissing }} 项原图已丢失
+          另有 {{ stats.pendingMissing }} 项原图已丢失，无法复核
         </span>
       </div>
       <div class="stat-card">
@@ -431,6 +431,8 @@ const allSelected = computed(
     reviewableRows.value.every((row) => selectedIds.value.includes(row.id))
 )
 const pendingRows = computed(() => reviewableRows.value)
+/** 真正可操作的待复核数：总数扣掉原图已丢失、点不动的那些。 */
+const actionablePending = computed(() => Math.max(stats.value.pending - stats.value.pendingMissing, 0))
 
 /** 队列被清空时的文案：区分"本来就没有"和"被 hideMissing 挡掉了"。 */
 const emptyHint = computed(() => {
@@ -932,7 +934,7 @@ input[type='checkbox'] {
   margin-top: 12px;
   padding: 12px;
   border-radius: 6px;
-  background: var(--bg-liability-item);
+  background: var(--bg-info-block);
   border: 1px solid var(--border-subtle);
 }
 .active-row { display: flex; align-items: center; gap: 8px; }
