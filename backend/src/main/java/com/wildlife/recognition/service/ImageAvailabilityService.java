@@ -5,6 +5,7 @@ import com.wildlife.recognition.entity.RecognitionImage;
 import com.wildlife.recognition.repository.ImageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Files;
@@ -30,11 +31,16 @@ import java.util.Set;
  * {@code image_id NOT IN (...)} 过滤、用 {@code COUNT(*)} 计数，分页因此仍然是数据库分页。
  *
  * <h3>缓存与规模</h3>
- * 探测一次要遍历全表做 {@code Files.exists()}。本项目图像量级 10^3~10^4，
- * 一次约几十毫秒，配合 {@value #TTL_MS} ms 的 TTL 足够。
- * <p>若将来涨到 10^6 级，正确做法是在 {@code recognition_image} 上落一列
- * {@code file_missing}，由巡检任务（{@code ai-engine/scripts/check_image_consistency.py}）
- * 定期回写，本类退化成纯读库 —— 届时只有 {@link #refresh()} 的实现要换，调用方不动。
+ * 探测一次要遍历全表做 {@code Files.exists()}。本机实测约
+ * <b>0.47 ms/行</b>（bind mount 上 {@code stat} 很贵）：564 行 0.28 s，
+ * 10^4 行约 4.7 s，<b>10^5 行约 47 s</b>。
+ * <p>为此做了两件事：一是 {@value #TTL_MS} ms 的 TTL 缓存，二是
+ * {@link #scheduledRefresh()} 在后台提前续期，让这个开销不落在用户请求线程上。
+ * <p><b>但这只是把开销挪走，没有消除它。</b>到 10^5 级时，每 {@code TTL_MS/2} ms
+ * 就要跑一次 47 s 的探测，后台线程会持续饱和 —— 届时正确做法是在
+ * {@code recognition_image} 上落一列 {@code file_missing}，由巡检任务
+ * （{@code ai-engine/scripts/check_image_consistency.py}）定期回写，本类退化成纯读库。
+ * 只有 {@link #refresh()} 的实现要换，调用方不动。
  */
 @Service
 public class ImageAvailabilityService {
@@ -94,6 +100,30 @@ public class ImageAvailabilityService {
         loadedAt = System.currentTimeMillis();
         log.info("原图可用性探测: 共 {} 行, 物理文件缺失 {} 行", images.size(), missing.size());
         return missing;
+    }
+
+    /**
+     * 后台定期刷新，把全量探测挪出请求线程。
+     *
+     * <p>{@link #ensureFresh()} 仍保留"过期就同步补一次"的兜底，但正常路径下不会走到：
+     * 这里的刷新周期取 {@code TTL_MS / 2}，也就是在快照过期之前就提前续期，
+     * 于是用户请求几乎总是读到新鲜快照、不会阻塞。缓存失效只可能发生在
+     * 调度线程被拖住或首次探测尚未完成时，那时 {@code ensureFresh()} 兜底保证口径正确。
+     *
+     * <p>刷新周期之所以用 {@code fixedDelay} 而不是 {@code fixedRate}：探测本身可能是秒级，
+     * {@code fixedDelay} 表示"上一次跑完再等这么久"，不会让任务重叠堆积；
+     * 而且 {@code refresh()} 是 {@code synchronized} 的，重叠也没有意义。
+     *
+     * <p>异常在这里被吞掉是刻意的：一次探测失败不该影响后续调度，
+     * 沿用上一次快照比让复核队列整页打不开要好。
+     */
+    @Scheduled(initialDelay = TTL_MS / 2, fixedDelay = TTL_MS / 2)
+    public void scheduledRefresh() {
+        try {
+            refresh();
+        } catch (RuntimeException e) {
+            log.warn("原图可用性后台刷新失败，沿用上一次快照", e);
+        }
     }
 
     /**

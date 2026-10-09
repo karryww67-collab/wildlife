@@ -407,7 +407,20 @@ public class ReviewService {
         stats.put("confirmed", confirmed);
         stats.put("corrected", corrected);
         stats.put("rejected", rejected);
-        stats.put("reviewRate", total == 0 ? 0.0 : round(reviewed * 100.0 / total));
+        /*
+         * 复核率的分母要扣掉"原图已丢失"的待复核项。
+         *
+         * 这些项看不到原图、review() 也会拒绝，永远不可能离开 PENDING。若仍算进分母，
+         * 复核率会被永久压低并且**封顶** —— 本机 808 条里 798 条属于此类，
+         * 封顶只有 10/808 = 1.24%，这个数字对外没有解释力。
+         *
+         * 扣掉之后它才回答一个有意义的问题："能复核的里面复核了多少"。
+         * pendingMissing 只统计 PENDING 且原图丢失的，是 total 的子集，
+         * 所以 reviewable >= reviewed 恒成立，不会出现超过 100% 的比值。
+         */
+        long reviewable = total - pendingMissing;
+        stats.put("reviewable", reviewable);
+        stats.put("reviewRate", reviewable <= 0 ? 0.0 : round(reviewed * 100.0 / reviewable));
         stats.put("correctRate", reviewed == 0 ? 0.0 : round(corrected * 100.0 / reviewed));
         stats.put("rejectRate", reviewed == 0 ? 0.0 : round(rejected * 100.0 / reviewed));
         stats.put("topCorrectedClasses", topCorrected);
