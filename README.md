@@ -351,8 +351,7 @@ python scripts/bench_inference.py --weights /models/wildlife-v1.0/best.pt \
 
 ## 九、已知限制
 
-1. **微调权重待落地**。训练数据链路已跑通（§8.0/§8.4：SWG+WCS 合并 19 类、19,723 图 / 23,443 框），微调训练在魔搭 A10 上进行。在 `best.pt` 放入 `ai-engine/models/wildlife-v1.0/` 之前，引擎仍回退加载 `models/test-coco-yolo11n/best.pt`（COCO 预训练权重，不含 19 类中的任何目标）。这种"版本号与实际权重不一致"的状态现已**不再静默**：启动日志会打出自检结论，「模型管理」页会显示醒目告警条，`GET /ai/model/status` 与 `check_weights.py` 都能给出实际生效权重的 md5（详见第八节）。
-   库内 798 条结果的类别分布恰好印证了这一点：实际检出的是 COCO 的 `dog / elephant / person / zebra` 与历史遗留的 `野猪 / 鹿`，而 `model_version.class_config` 声明的 `bear / deer / fox / monkey / tiger` **一次都没有检出过**。可直接对比 `GET /api/results/classes?usedOnly=false`（11 类，含声明未检出者）与 `?usedOnly=true`（6 类，仅实际检出者）。
+1. **微调权重待落地**（**已解决**）。微调权重 `wildlife-v1.0/best.pt` 已训练完成、落地并启用（mAP50 0.8106 / mAP50-95 0.6357），端到端识别已验证。以下保留建库早期 COCO 权重时期的现象描述，作为历史记录。训练数据链路已跑通
 2. **超大任务未经压测**。实测最大任务为 **1,200 张**（2026-10-08 走真实接口的端到端实测：上传 42.1 张/秒、端到端 133.53 ms/张、1,200 成功 0 失败、检出框计数可分毫核对；脚本与原始结果见 `ai-engine/scripts/scale_test.py` 与 `ai-engine/scripts/scale_result_1200.json`）。**10 万张级别仍未做加载测试**：按该速率线性外推约 3.7 小时纯推理、约 40 分钟上传，**是外推不是实测**。任务创建按 `ATTACH_BATCH_SIZE=1000` 分批 UPDATE（不是单条 `IN (...)`），10 万个 ID 的请求体约 700 KB，该路径未实测；故障注入、多 worker 同样未验证。
 3. **前端类型检查未过**。`npm run build`（= `vue-tsc && vite build`）会被类型错误拦住，故 `frontend/Dockerfile` 里用 `npx vite build` 绕过；类型层问题不影响运行，但修完后应改回标准命令。
 4. **REVIEWER 角色实际退化为 USER**。`AuthService.normalizeRole()` 只归一出 `ADMIN` 与 `USER` 两种角色，库里存的 `REVIEWER` 会被降为 `USER`。用户管理页仍可创建 REVIEWER 账号，但该账号的实际权限与只读用户完全相同。要让它真正生效，需先改归一化逻辑，再把「提交复核结论」之类的动作单独收口。
