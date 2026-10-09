@@ -2,10 +2,12 @@ package com.wildlife.recognition.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.wildlife.recognition.entity.DetectionResult;
+import com.wildlife.recognition.entity.ModelVersion;
 import com.wildlife.recognition.entity.RecognitionImage;
 import com.wildlife.recognition.entity.RecognitionTask;
 import com.wildlife.recognition.repository.DetectionResultRepository;
 import com.wildlife.recognition.repository.ImageRepository;
+import com.wildlife.recognition.repository.ModelVersionRepository;
 import com.wildlife.recognition.repository.TaskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -15,11 +17,14 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * 统计分析服务。
@@ -118,18 +123,32 @@ public class StatisticsService {
         PROTECTION_DICT.put("黑眉锦蛇", new String[]{"三有", "LC"});
         PROTECTION_DICT.put("中华蟾蜍", new String[]{"三有", "LC"});
         PROTECTION_DICT.put("黑斑蛙", new String[]{"三有", "LC"});
+
+        // ── 当前部署模型 wildlife-v1.0（19 类）中此前未收录的 8 类 ──
+        // 此前它们全部落到"其他"，保护等级分布图失真。
+        PROTECTION_DICT.put("虎", new String[]{"国家一级", "EN"});
+        PROTECTION_DICT.put("灰孔雀雉", new String[]{"国家一级", "LC"});
+        PROTECTION_DICT.put("红原鸡", new String[]{"国家二级", "LC"});
+        PROTECTION_DICT.put("蟹獴", new String[]{"国家二级", "LC"});
+        PROTECTION_DICT.put("麂", new String[]{"三有", "LC"});
+        PROTECTION_DICT.put("鼬獾", new String[]{"三有", "LC"});
+        PROTECTION_DICT.put("红颊松鼠", new String[]{"三有", "LC"});
+        PROTECTION_DICT.put("帚尾豪猪", new String[]{"三有", "LC"});
     }
 
     private final ImageRepository imageRepository;
     private final DetectionResultRepository resultRepository;
     private final TaskRepository taskRepository;
+    private final ModelVersionRepository modelVersionRepository;
 
     public StatisticsService(ImageRepository imageRepository,
                              DetectionResultRepository resultRepository,
-                             TaskRepository taskRepository) {
+                             TaskRepository taskRepository,
+                             ModelVersionRepository modelVersionRepository) {
         this.imageRepository = imageRepository;
         this.resultRepository = resultRepository;
         this.taskRepository = taskRepository;
+        this.modelVersionRepository = modelVersionRepository;
     }
 
     // ── 总览 ────────────────────────────────────────────────────────────────
@@ -139,10 +158,6 @@ public class StatisticsService {
      * 以及<b>检出率</b>（有检出的图像 / 识别成功的图像）。
      */
     public Map<String, Object> overview(String range) {
-        LocalDateTime[] window = resolveRange(range);
-        LocalDateTime windowStart = window == null ? null : window[0];
-        LocalDateTime windowEnd = window == null ? null : window[1];
-
         List<RecognitionImage> images = filterImagesByRange(imageRepository.selectList(null), range);
         List<DetectionResult> results = filterResultsByRange(resultRepository.selectList(null), range);
 
@@ -168,10 +183,13 @@ public class StatisticsService {
             }
         }
 
-        // 检出率走 SQL 聚合（COUNT + COUNT DISTINCT），不把全表拉进内存 ——
-        // 10 万张图时上面两句 selectList(null) 会 OOM，而这两条 COUNT 始终只回一行。
-        long successImages = orZero(imageRepository.countSuccessImages(windowStart, windowEnd));
-        long detectedImages = orZero(resultRepository.countDetectedImages(windowStart, windowEnd));
+        // 分子分母都在已加载的数据上算 —— 与物种分布、保护等级分布共用同一批 results，
+        // 因此"检出率"与"物种分布"的口径必然一致，不会出现两者对不上的情况。
+        Set<Long> detectedImageIds = results.stream()
+                .map(DetectionResult::getImageId).filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+        long detectedImages = detectedImageIds.size();
+        long successImages = scopedSuccessImages(images, detectedImageIds);
 
         Map<String, Object> overview = new LinkedHashMap<>();
         overview.put("imageCount", images.size());
@@ -283,31 +301,32 @@ public class StatisticsService {
      *   <li>{@code trend()} 数的是 <b>detection_result 的行数</b> —— 一张图检出 3 个目标就算 3。
      *       它衡量的是"系统吐出了多少个框"，线越高只说明框越多，<b>回答不了
      *       "这批图里有多少张确实拍到了动物"</b>；</li>
-     *   <li>本方法数的是 <b>图像</b>（{@code COUNT(DISTINCT image_id)}），
-     *       这才是需求里写的"检出率"。</li>
+     *   <li>本方法数的是 <b>图像</b>（去重后的 image_id），这才是需求里写的"检出率"。</li>
      * </ul>
-     * 二者在长尾物种多的批次里会明显分叉：识别量涨、检出率不动。
      *
      * <p>返回的 {@code list} 已合并两条序列的时间 key 并按时间升序 —— 某天若
-     * "识别成功但一个目标都没检出"（本项目当前有 4 张这样的图），该天仍会出现在序列里
-     * （{@code detectionRate=0}），而不是整个点消失；否则趋势图会把这种"零检出"的日子
-     * 悄悄跳过，看起来像是从没上传过图。
+     * "识别成功但一个目标都没检出"，该天仍会出现在序列里（{@code detectionRate=0}），
+     * 而不是整个点消失；否则趋势图会把这种"零检出"的日子悄悄跳过，
+     * 看起来像是从没上传过图。
      *
      * @param granularity {@code hour} / {@code day}
      * @param range       {@code all} / {@code today} / {@code 7d} / {@code 30d} / {@code 90d} / {@code 1y}
      * @return {@code {granularity, range, successImages, detectedImages, undetectedImages, detectionRate, list[]}}
      */
     public Map<String, Object> detectionRate(String granularity, String range) {
-        LocalDateTime[] window = resolveRange(range);
-        LocalDateTime start = window == null ? null : window[0];
-        LocalDateTime end = window == null ? null : window[1];
         boolean hourly = "hour".equalsIgnoreCase(granularity);
 
-        long successImages = orZero(imageRepository.countSuccessImages(start, end));
-        long detectedImages = orZero(resultRepository.countDetectedImages(start, end));
+        List<RecognitionImage> images = filterImagesByRange(imageRepository.selectList(null), range);
+        List<DetectionResult> results = filterResultsByRange(resultRepository.selectList(null), range);
 
-        Map<String, Long> successBySlot = toCountMap(imageRepository.countSuccessImagesByBucket(hourly, start, end));
-        Map<String, Long> detectedBySlot = toCountMap(resultRepository.countDetectedImagesByBucket(hourly, start, end));
+        Set<Long> detectedImageIds = results.stream()
+                .map(DetectionResult::getImageId).filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+        long detectedImages = detectedImageIds.size();
+        long successImages = scopedSuccessImages(images, detectedImageIds);
+
+        Map<String, Long> successBySlot = successBySlot(images, detectedImageIds, hourly);
+        Map<String, Long> detectedBySlot = detectedBySlot(results, hourly);
 
         Set<String> slots = new TreeSet<>();
         slots.addAll(successBySlot.keySet());
@@ -428,11 +447,142 @@ public class StatisticsService {
         return "国家一级".equals(level) || "国家二级".equals(level);
     }
 
+    // ── 统计口径收窄：只统计当前启用模型能产出的类别 ──────────────────────────
+
+    /** 类别清单的进程内缓存时长，避免每次统计都查库。 */
+    private static final long CLASS_SCOPE_TTL_MS = 60_000L;
+
+    private volatile Set<String> classScopeCache;
+    private volatile long classScopeCachedAt;
+
+    /**
+     * 当前启用模型声明的类别名集合（读 {@code model_version.class_config}，当前为 19 类）。
+     *
+     * <p><b>为什么需要它</b>：库里留着建库早期用 COCO 预训练模型跑出来的历史结果
+     * （{@code person} / {@code dog} / {@code elephant} / {@code zebra}，合计 756 行，
+     * 占 detection_result 全表 93.6%），以及一批 class_id 整体偏移 3 位的记录。
+     * 它们都不是当前部署的野生动物模型产出的，不剔除的话统计页头条会显示
+     * "elephant 44.93%"，检出率会变成 99.03% 这种与真实模型无关的数字。
+     *
+     * <p>清单直接读库，所以换模型后统计口径自动跟随，不需要改代码。
+     * 读不到（没有启用模型 / 解析失败 / 查库异常）就返回<b>空集</b>，
+     * 调用方见此不做过滤 —— 宁可多显示，也不能把整页统计静默清空成 0，
+     * 那看起来像数据丢了。
+     */
+    private Set<String> activeClassNames() {
+        long now = System.currentTimeMillis();
+        Set<String> cached = classScopeCache;
+        if (cached != null && now - classScopeCachedAt < CLASS_SCOPE_TTL_MS) {
+            return cached;
+        }
+        Set<String> names = new HashSet<>();
+        try {
+            ModelVersion active = modelVersionRepository.selectOne(new QueryWrapper<ModelVersion>()
+                    .eq("status", "ENABLED").orderByDesc("id").last("LIMIT 1"));
+            if (active != null && StringUtils.hasText(active.getClassConfig())) {
+                // class_config 形如 ["野猪", "猕猴", ...]，简单按逗号切再剥掉括号与引号，
+                // 不引 JSON 库 —— 这里只需要一份名字清单，容错比严格更重要。
+                for (String token : active.getClassConfig().split(",")) {
+                    String name = token.replace('[', ' ').replace(']', ' ').replace('"', ' ').trim();
+                    if (!name.isEmpty()) {
+                        names.add(name);
+                    }
+                }
+            }
+        } catch (RuntimeException ex) {
+            names.clear();
+        }
+        classScopeCache = names;
+        classScopeCachedAt = now;
+        return names;
+    }
+
+    /** 按当前模型的类别清单收窄结果集；清单为空时原样返回（见 activeClassNames 的说明）。 */
+    private List<DetectionResult> scopedByActiveModel(List<DetectionResult> results) {
+        if (results == null || results.isEmpty()) {
+            return results == null ? List.of() : results;
+        }
+        Set<String> scope = activeClassNames();
+        if (scope.isEmpty()) {
+            return results;
+        }
+        return results.stream()
+                .filter(r -> r.getClassName() != null && scope.contains(r.getClassName()))
+                .toList();
+    }
+
+    /**
+     * 检出率的<b>分母</b>：范围内状态为 SUCCESS 的图像，且其所属任务产出过
+     * 当前模型类别的检出。
+     *
+     * <p>为什么分母也要收窄：413 张 SUCCESS 图里有 407 张是 COCO 时代跑的，
+     * 当前模型从没见过它们。把它们算进分母，等于拿别的模型的成绩当自己的分母，
+     * 检出率会被稀释成一个没有意义的混合数字。
+     *
+     * <p>只按"任务"收窄而不按"图像"收窄是有意的：同一个任务里的图是同一批数据、
+     * 同一个模型跑的，只要这个任务产出过当前模型的类别，它下面那些
+     * "识别成功但没检出"的图才是真正有价值的漏检样本，必须留在分母里。
+     */
+    private long scopedSuccessImages(List<RecognitionImage> images, Set<Long> detectedImageIds) {
+        boolean narrowed = !activeClassNames().isEmpty() && !detectedImageIds.isEmpty();
+        Set<Long> taskIds = new HashSet<>();
+        if (narrowed) {
+            for (RecognitionImage image : images) {
+                if (detectedImageIds.contains(image.getId()) && image.getTaskId() != null) {
+                    taskIds.add(image.getTaskId());
+                }
+            }
+        }
+        return images.stream()
+                .filter(i -> ImageRepository.STATUS_SUCCESS.equals(i.getStatus()))
+                .filter(i -> !narrowed || (i.getTaskId() != null && taskIds.contains(i.getTaskId())))
+                .count();
+    }
+
+    /** 按天 / 小时分桶的"识别成功图像数"，口径与 {@link #scopedSuccessImages} 完全一致。 */
+    private Map<String, Long> successBySlot(List<RecognitionImage> images, Set<Long> detectedImageIds, boolean hourly) {
+        boolean narrowed = !activeClassNames().isEmpty() && !detectedImageIds.isEmpty();
+        Set<Long> taskIds = new HashSet<>();
+        if (narrowed) {
+            for (RecognitionImage image : images) {
+                if (detectedImageIds.contains(image.getId()) && image.getTaskId() != null) {
+                    taskIds.add(image.getTaskId());
+                }
+            }
+        }
+        Map<String, Long> map = new LinkedHashMap<>();
+        for (RecognitionImage image : images) {
+            if (!ImageRepository.STATUS_SUCCESS.equals(image.getStatus()) || image.getCreateTime() == null) {
+                continue;
+            }
+            if (narrowed && (image.getTaskId() == null || !taskIds.contains(image.getTaskId()))) {
+                continue;
+            }
+            map.merge(image.getCreateTime().format(hourly ? HOUR_FORMAT : DAY_FORMAT), 1L, Long::sum);
+        }
+        return map;
+    }
+
+    /** 按天 / 小时分桶的"有检出图像数"（同一张图的多个框只算一次）。 */
+    private Map<String, Long> detectedBySlot(List<DetectionResult> results, boolean hourly) {
+        Map<String, Set<Long>> seen = new LinkedHashMap<>();
+        for (DetectionResult result : results) {
+            if (result.getImageId() == null || result.getCreateTime() == null) {
+                continue;
+            }
+            seen.computeIfAbsent(result.getCreateTime().format(hourly ? HOUR_FORMAT : DAY_FORMAT),
+                    key -> new HashSet<>()).add(result.getImageId());
+        }
+        Map<String, Long> map = new LinkedHashMap<>();
+        seen.forEach((slot, ids) -> map.put(slot, (long) ids.size()));
+        return map;
+    }
+
     // ── 内部工具 ────────────────────────────────────────────────────────────
 
     private List<DetectionResult> resultsOfTask(Long taskId) {
         if (taskId == null) {
-            return resultRepository.selectList(null);
+            return scopedByActiveModel(resultRepository.selectList(null));
         }
         List<Long> imageIds = imageRepository
                 .selectList(new QueryWrapper<RecognitionImage>().eq("task_id", taskId))
@@ -440,15 +590,17 @@ public class StatisticsService {
         if (imageIds.isEmpty()) {
             return List.of();
         }
-        return resultRepository.selectList(new QueryWrapper<DetectionResult>().in("image_id", imageIds));
+        return scopedByActiveModel(
+                resultRepository.selectList(new QueryWrapper<DetectionResult>().in("image_id", imageIds)));
     }
 
     private List<DetectionResult> filterResultsByRange(List<DetectionResult> results, String range) {
+        List<DetectionResult> scoped = scopedByActiveModel(results);
         LocalDateTime[] window = resolveRange(range);
         if (window == null) {
-            return results;
+            return scoped;
         }
-        return results.stream()
+        return scoped.stream()
                 .filter(r -> r.getCreateTime() != null
                         && !r.getCreateTime().isBefore(window[0])
                         && !r.getCreateTime().isAfter(window[1]))
@@ -504,35 +656,6 @@ public class StatisticsService {
      */
     private static double detectionRateOf(long detectedImages, long successImages) {
         return successImages <= 0 ? 0.0 : round(detectedImages * 100.0 / successImages, 2);
-    }
-
-    /** COUNT 的返回值是 {@link Long}，可能为 null，统一收成 0。 */
-    private static long orZero(Long value) {
-        return value == null ? 0L : value;
-    }
-
-    /**
-     * 把 {@code {time_slot, cnt}} 行列表转成 Map，并保持时间升序。
-     *
-     * <p>MyBatis 把 COUNT 的结果按列类型可能映射成 Long / BigInteger / BigDecimal，
-     * 所以这里按 {@link Number} 取 longValue，不做强制转型，避免 ClassCastException。
-     * {@code time_slot} 为 null 的行直接跳过（分桶列不该为 null，防御性处理）。
-     */
-    private static Map<String, Long> toCountMap(List<Map<String, Object>> rows) {
-        Map<String, Long> map = new LinkedHashMap<>();
-        if (rows == null) {
-            return map;
-        }
-        for (Map<String, Object> row : rows) {
-            Object slot = row.get("time_slot");
-            if (slot == null) {
-                continue;
-            }
-            Object count = row.get("cnt");
-            long value = count instanceof Number number ? number.longValue() : 0L;
-            map.merge(slot.toString(), value, Long::sum);
-        }
-        return map;
     }
 
     private static double round(double value, int scale) {
