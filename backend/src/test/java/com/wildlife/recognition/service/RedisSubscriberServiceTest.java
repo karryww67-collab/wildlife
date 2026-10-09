@@ -20,8 +20,6 @@ import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.TreeMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -277,10 +275,6 @@ class RedisSubscriberServiceTest {
                 .as("error_message=null 必须真的作为参数绑定：updateById(实体) 的 NOT_NULL 策略会跳过 null，"
                         + "那样重试成功时旧的失败原因就清不掉")
                 .containsNull();
-
-        // ⑨-B 离线 probe 证据：把图像闸门（含任务守卫）渲染出的语句原样打出来
-        System.out.println("[R9B SQL PROBE] IMAGE GATE SET   : " + oneLine(wrapper.getSqlSet()));
-        System.out.println("[R9B SQL PROBE] IMAGE GATE WHERE : " + oneLine(where));
     }
 
     @Test
@@ -365,26 +359,8 @@ class RedisSubscriberServiceTest {
                 .as("taskId + 两个增量 + 两个允许状态都在参数表里")
                 .contains(TASK_ID, 1, 0, "PENDING", "PROCESSING");
 
-        // ── 离线 SQL probe：把 wrapper 渲染出的语句与参数原样打出来 ──
-        // 这一行是 ⑨-A 验收②的证据来源：Wrapper 方案的价值就在于不必启动 Spring / 连 MySQL
-        // 也能看到 MyBatis 即将执行的 SQL 形状与绑定参数（@Update 注解做不到这点）。
-        System.out.println("[R9A SQL PROBE] SET   : " + oneLine(set));
-        System.out.println("[R9A SQL PROBE] WHERE : " + oneLine(where));
-        System.out.println("[R9A SQL PROBE] PARAMS: " + new TreeMap<>(wrapper.getParamNameValuePairs()));
-        System.out.println("[R9A SQL PROBE] LITERAL: " + oneLine(literalSql(set, where, wrapper)));
-    }
-
-    private static String oneLine(String sql) {
-        return sql == null ? "null" : sql.replaceAll("\\s+", " ").trim();
-    }
-
-    /** 把 {@code #{ew.paramNameValuePairs.MPGENVALn}} 换回绑定的值，拼出一条可直接在 MySQL 上执行的语句。 */
-    private static String literalSql(String set, String where, UpdateWrapper<RecognitionTask> wrapper) {
-        String sql = "UPDATE recognition_task SET " + set + " " + where;
-        for (Map.Entry<String, Object> entry : wrapper.getParamNameValuePairs().entrySet()) {
-            sql = sql.replace("#{ew.paramNameValuePairs." + entry.getKey() + "}", "'" + entry.getValue() + "'");
-        }
-        return sql;
+        // 本用例直接对 wrapper 渲染出的 SQL 形状与绑定参数做断言：
+        // 不必启动 Spring、连 MySQL，就能验证 MyBatis 即将执行的语句（@Update 注解做不到这点）。
     }
 
     @Test
@@ -503,9 +479,6 @@ class RedisSubscriberServiceTest {
         verify(imageRepository).failPendingImages(TASK_ID, "AI 引擎崩了");
         assertThat(task.getStatus()).isEqualTo("FAILED");
         assertThat(task.getFinishTime()).isNotNull();
-
-        System.out.println("[R9B SQL PROBE] TASK FAILED SET   : " + oneLine(wrapper.getSqlSet()));
-        System.out.println("[R9B SQL PROBE] TASK FAILED WHERE : " + oneLine(wrapper.getCustomSqlSegment()));
     }
 
     @Test
@@ -583,9 +556,5 @@ class RedisSubscriberServiceTest {
         verify(taskRepository, never()).updateById(ArgumentMatchers.<RecognitionTask>any());
         assertThat(task.getStatus()).isEqualTo("PROCESSING");
         assertThat(task.getStartTime()).isNotNull();
-
-        System.out.println("[R9B SQL PROBE] STARTED SET   : " + oneLine(wrapper.getSqlSet()));
-        System.out.println("[R9B SQL PROBE] STARTED WHERE : " + oneLine(wrapper.getCustomSqlSegment()));
-        System.out.println("[R9B SQL PROBE] IMAGE BATCH WHERE : " + oneLine(imageWrapper.getCustomSqlSegment()));
     }
 }
