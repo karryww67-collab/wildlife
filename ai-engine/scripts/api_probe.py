@@ -70,4 +70,4 @@ for name in ENDPOINTS:
     got = sorted(x["ms"] for x in rows if x["api"] == name)
     if got:
         print(f"  {name:13s} p50={got[len(got)//2]:8.1f}  "
-              f"p95={got[int(len(got)*0.95)]:9.1f}  max={got[-1]:9.1f} ms")
+              f"p95={got[int(len(got)*0.95)]:9.1f}  max={got[-1]:9.1f} ms")# x
