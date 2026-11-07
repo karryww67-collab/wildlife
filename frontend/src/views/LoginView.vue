@@ -27,88 +27,11 @@
         <div class="yolo-box yolo-box-4"></div>
       </div>
 
-      <!-- 野生动物单线线稿暗纹 -->
-      <svg class="animal-silhouette monkey" viewBox="0 0 120 100" xmlns="http://www.w3.org/2000/svg">
-        <path
-          d="M 50 18
-             A 14 14 0 1 1 50 40
-             Q 64 46 66 62
-             L 64 76
-             Q 58 82 48 80
-             Q 38 76 36 62
-             L 32 40
-             Q 26 28 36 20
-             M 66 62
-             Q 80 56 84 72
-             Q 86 86 72 92"
-          fill="none"
-          stroke="#ffffff"
-          stroke-width="0.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-
-      <svg class="animal-silhouette bird" viewBox="0 0 140 100" xmlns="http://www.w3.org/2000/svg">
-        <path
-          d="M 70 14
-             Q 46 24 40 46
-             Q 36 62 44 68
-             Q 58 72 74 64
-             L 80 68
-             L 82 92
-             M 74 64
-             Q 90 60 100 52
-             M 80 68
-             L 82 92"
-          fill="none"
-          stroke="#ffffff"
-          stroke-width="0.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-
-      <svg class="animal-silhouette antelope" viewBox="0 0 150 100" xmlns="http://www.w3.org/2000/svg">
-        <path
-          d="M 54 28
-             Q 36 12 24 18
-             Q 18 32 30 40
-             Q 42 44 58 40
-             L 84 46
-             Q 94 52 92 68
-             L 88 92
-             M 58 40
-             L 54 92
-             M 84 46
-             L 86 92"
-          fill="none"
-          stroke="#ffffff"
-          stroke-width="0.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-
-      <svg class="animal-silhouette boar" viewBox="0 0 130 100" xmlns="http://www.w3.org/2000/svg">
-        <path
-          d="M 28 44
-             Q 16 48 14 56
-             Q 16 64 30 66
-             L 66 62
-             Q 82 64 84 72
-             L 80 92
-             M 30 66
-             L 28 92
-             M 66 62
-             L 68 92"
-          fill="none"
-          stroke="#ffffff"
-          stroke-width="0.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
+      <!-- 野生动物线稿暗纹（从参考图提取：仅保留亮线，背景透明） -->
+      <img class="animal-silhouette macaque" src="../assets/animals/macaque.png" alt="" />
+      <img class="animal-silhouette heron" src="../assets/animals/heron.png" alt="" />
+      <img class="animal-silhouette antelope" src="../assets/animals/antelope.png" alt="" />
+      <img class="animal-silhouette boar" src="../assets/animals/boar.png" alt="" />
     </div>
 
     <!-- ══════════ 玻璃拟态登录卡片 ══════════ -->
@@ -341,45 +264,39 @@ async function handleLogin() {
 /* 动物线稿暗纹：统一外轮廓单线，无填充、无内部纹理 */
 .animal-silhouette {
   position: absolute;
-  width: 150px;
-  height: 120px;
-  opacity: 0.1;
+  height: auto;
   pointer-events: none;
-  stroke: #ffffff;
-  fill: none;
-  stroke-width: 0.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  opacity: 0.12;
+  user-select: none;
 }
 
-/* 猕猴：圆润头部 + 长弯尾 */
-.monkey {
-  left: 8%;
-  bottom: 10%;
-  transform: scale(1.05);
+/* 猕猴：坐姿侧视（左上） */
+.macaque {
+  width: 300px;
+  left: 2%;
+  top: 5%;
 }
 
-/* 水鸟：长S型脖颈 + 细长腿 */
-.bird {
-  left: 12%;
-  top: 12%;
-  transform: scale(1.1);
+/* 水鸟：S 颈长腿（右上） */
+.heron {
+  width: 300px;
+  right: 2%;
+  top: 4%;
 }
 
-/* 羚羊：后弯长角 + 流线躯干 */
+/* 羚羊：后掠长角（左下） */
 .antelope {
-  right: 10%;
-  top: 8%;
-  transform: scale(1.15);
+  width: 400px;
+  left: 1%;
+  bottom: 2%;
 }
 
-/* 野猪：短拱嘴 + 敦实体态 */
+/* 野猪：敦实拱嘴（右下） */
 .boar {
-  right: 8%;
-  bottom: 12%;
-  transform: scale(1);
+  width: 420px;
+  right: 1%;
+  bottom: 4%;
 }
-
 /* 扫描线动画 */
 @keyframes scan {
   0% {
