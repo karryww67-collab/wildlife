@@ -1,21 +1,32 @@
 <template>
   <div class="login-page">
-    <!-- ── 背景层 1：地形等高线（遥感地形底的抽象表达，JS 生成） ── -->
+    <!-- 四角压深 -->
+    <div class="bg-corners" aria-hidden="true"></div>
+
+    <!-- 层1：遥感地形等高线（JS 生成） -->
     <div class="bg-terrain">
       <svg ref="terrainSvg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice"></svg>
     </div>
 
-    <!-- ── 背景层 2：数字网格 ── -->
-    <div class="bg-grid"></div>
+    <!-- 层2：数字网格 + 点阵 + 数据流线 -->
+    <div class="bg-grid" aria-hidden="true"></div>
+    <div class="bg-dots" aria-hidden="true"></div>
+    <div class="bg-flow" aria-hidden="true">
+      <div class="flow-h fh1"></div>
+      <div class="flow-h fh2"></div>
+      <div class="flow-h fh3"></div>
+      <div class="flow-v fv1"></div>
+      <div class="flow-v fv2"></div>
+    </div>
 
-    <!-- ── 背景层 3：数据流粒子 ── -->
+    <!-- 层3：粒子 -->
     <div class="bg-particles">
       <canvas ref="particlesCanvas"></canvas>
     </div>
 
-    <!-- ── 背景层 4：野生动物线稿剪影 ── -->
+    <!-- 层4：野生动物线稿剪影（轮廓线，无填充） -->
     <div class="bg-animals" aria-hidden="true">
-      <!-- 野猪 -->
+      <!-- 野猪（左下） -->
       <svg class="an-boar" viewBox="0 0 240 140">
         <path d="M198 102 C206 92 206 70 194 62 C180 54 158 50 138 50 C124 50 112 54 102 60 C92 66 82 70 72 74 C60 79 48 84 40 88 C34 91 32 96 36 99 C40 102 48 101 56 98 C60 96 64 94 68 92 C76 98 92 104 112 106 C140 109 176 108 198 102 Z" />
         <path d="M96 58 C100 48 110 46 114 54" />
@@ -28,7 +39,7 @@
         <circle cx="58" cy="84" r="1.8" />
       </svg>
 
-      <!-- 猕猴 -->
+      <!-- 猕猴（右下） -->
       <svg class="an-macaque" viewBox="0 0 240 140">
         <path d="M62 56 C58 46 66 39 75 41 C83 43 87 50 87 58 C95 62 106 66 118 68 C136 71 154 74 168 77 C178 79 182 85 178 91 C162 95 140 95 122 93 C104 91 88 87 78 81 C72 77 66 70 62 64 C58 62 56 60 62 56 Z" />
         <path d="M62 60 C54 60 52 67 58 70 C61 72 65 71 67 68" />
@@ -41,7 +52,7 @@
         <path d="M178 84 C194 80 204 68 200 56 C197 46 188 43 182 49" />
       </svg>
 
-      <!-- 鸟类 -->
+      <!-- 鸟类（右上） -->
       <svg class="an-bird" viewBox="0 0 220 130">
         <path d="M110 72 C96 52 72 54 52 78" />
         <path d="M110 72 C124 52 148 54 168 78" />
@@ -49,7 +60,7 @@
         <path d="M100 58 C96 52 92 50 88 50" />
       </svg>
 
-      <!-- 羚羊 -->
+      <!-- 羚羊（左上） -->
       <svg class="an-antelope" viewBox="0 0 240 140">
         <path d="M70 86 C70 76 84 70 106 68 C128 66 144 70 150 77 C154 82 151 88 144 92 C131 98 106 100 90 97 C78 95 70 92 70 86 Z" />
         <path d="M147 76 C150 64 156 52 164 42" />
@@ -66,7 +77,7 @@
       </svg>
     </div>
 
-    <!-- ── 背景层 5：目标检测框虚线 ── -->
+    <!-- 层5：YOLO 目标检测框虚线 -->
     <div class="bg-boxes" aria-hidden="true">
       <div class="det-box d1"><span>野猪 0.91</span></div>
       <div class="det-box d2"><span>猕猴 0.87</span></div>
@@ -76,21 +87,15 @@
       <div class="det-box d6"><span>豹猫 0.72</span></div>
     </div>
 
-    <!-- ── 背景层 6：微弱扫描光晕 ── -->
+    <!-- 层6：微弱扫光 + 云雾 -->
     <div class="bg-scan" aria-hidden="true"></div>
-
-    <!-- ── 背景层 7：云雾 ── -->
     <div class="bg-mist" aria-hidden="true">
       <div class="mist m1"></div>
       <div class="mist m2"></div>
       <div class="mist m3"></div>
     </div>
 
-    <!-- ── 背景层 8：卡片后柔光与暗角 ── -->
-    <div class="bg-halo" aria-hidden="true"></div>
-    <div class="bg-vignette" aria-hidden="true"></div>
-
-    <!-- ── 玻璃拟态登录卡片（内容与原版一致） ── -->
+    <!-- 前景：玻璃拟态登录卡片 -->
     <div class="login-card">
       <div class="login-logo">
         <span class="logo-icon">🐾</span>
@@ -100,11 +105,11 @@
 
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-item">
-          <label>用户名</label>
+          <label>账号</label>
           <input
             v-model="username"
             type="text"
-            placeholder="请输入用户名"
+            placeholder="请输入账号"
             autocomplete="username"
             :disabled="loading"
           />
@@ -151,15 +156,16 @@ const particlesCanvas = ref<HTMLCanvasElement | null>(null)
 let rafId = 0
 let detachResize: (() => void) | null = null
 
-/* ── 地形等高线：以若干"山丘"为中心生成闭合等值线 ─────────────── */
+/* ── 地形等高线：以若干"山丘"为中心的闭合等值线 ───────────────── */
 function buildTerrain() {
   const svg = terrainSvg.value
   if (!svg) return
   const NS = 'http://www.w3.org/2000/svg'
   const centers = [
-    { x: 380, y: 300, r: 300, seed: 1.2 },
-    { x: 1080, y: 640, r: 360, seed: 3.7 },
-    { x: 760, y: 120, r: 220, seed: 5.4 },
+    { x: 340, y: 250, r: 300, seed: 1.2 },
+    { x: 1120, y: 700, r: 360, seed: 3.7 },
+    { x: 800, y: 90, r: 220, seed: 5.4 },
+    { x: 120, y: 780, r: 200, seed: 7.9 },
   ]
   let d = ''
   for (const c of centers) {
@@ -184,12 +190,12 @@ function buildTerrain() {
   const path = document.createElementNS(NS, 'path')
   path.setAttribute('d', d)
   path.setAttribute('fill', 'none')
-  path.setAttribute('stroke', 'rgba(168,226,208,.17)')
+  path.setAttribute('stroke', 'rgba(190,238,224,.13)')
   path.setAttribute('stroke-width', '1')
   svg.appendChild(path)
 }
 
-/* ── 数据流粒子：缓慢漂浮 + 近邻细连线 ────────────────────────── */
+/* ── 粒子：缓慢漂浮 + 近邻细连线 ──────────────────────────────── */
 function startParticles() {
   const cv = particlesCanvas.value
   if (!cv) return
@@ -199,7 +205,7 @@ function startParticles() {
   let W = 0
   let H = 0
   const DPR = Math.min(window.devicePixelRatio || 1, 2)
-  const N = 46
+  const N = 40
   const pts: { x: number; y: number; vx: number; vy: number; r: number }[] = []
 
   const resize = () => {
@@ -217,9 +223,9 @@ function startParticles() {
     pts.push({
       x: Math.random() * 1440,
       y: Math.random() * 900,
-      vx: (Math.random() - 0.5) * 0.14,
-      vy: (Math.random() - 0.5) * 0.14,
-      r: 0.7 + Math.random() * 1.1,
+      vx: (Math.random() - 0.5) * 0.12,
+      vy: (Math.random() - 0.5) * 0.12,
+      r: 0.6 + Math.random() * 1.0,
     })
   }
 
@@ -239,7 +245,7 @@ function startParticles() {
       }
       ctx.beginPath()
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(170,238,214,.45)'
+      ctx.fillStyle = 'rgba(170,238,214,.40)'
       ctx.fill()
     }
 
@@ -248,8 +254,8 @@ function startParticles() {
         const dx = pts[i].x - pts[j].x
         const dy = pts[i].y - pts[j].y
         const d2 = dx * dx + dy * dy
-        if (d2 < 26000) {
-          ctx.strokeStyle = 'rgba(150,226,200,' + ((1 - d2 / 26000) * 0.1).toFixed(3) + ')'
+        if (d2 < 24000) {
+          ctx.strokeStyle = 'rgba(150,226,200,' + ((1 - d2 / 24000) * 0.09).toFixed(3) + ')'
           ctx.lineWidth = 0.7
           ctx.beginPath()
           ctx.moveTo(pts[i].x, pts[i].y)
@@ -294,7 +300,7 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-/* ══ 登录页：深森林青绿渐变 + 多层背景 + 玻璃拟态卡片 ══════════ */
+/* ══ 底色：四角深、中心柔亮 ═══════════════════════════════════ */
 .login-page {
   position: relative;
   width: 100%;
@@ -304,56 +310,101 @@ async function handleLogin() {
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(1100px 760px at 16% 10%, rgba(44, 132, 110, 0.36), transparent 62%),
-    radial-gradient(900px 700px at 84% 82%, rgba(24, 98, 84, 0.38), transparent 64%),
-    radial-gradient(1500px 980px at 50% 48%, rgba(12, 58, 49, 0.62), transparent 72%),
-    linear-gradient(158deg, #061d18 0%, #0a2b24 44%, #04140f 100%);
+    radial-gradient(ellipse 900px 620px at 50% 46%, rgba(39, 201, 176, 0.16) 0%, rgba(15, 107, 91, 0.1) 42%, transparent 68%),
+    linear-gradient(160deg, #04120f 0%, #0a3028 46%, #04110e 100%);
 }
 
-/* 层 1：地形等高线 */
+.bg-corners {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 55% at 0% 0%, rgba(2, 8, 7, 0.85), transparent 70%),
+    radial-gradient(ellipse 55% 55% at 100% 0%, rgba(2, 8, 7, 0.85), transparent 70%),
+    radial-gradient(ellipse 55% 55% at 0% 100%, rgba(2, 8, 7, 0.85), transparent 70%),
+    radial-gradient(ellipse 55% 55% at 100% 100%, rgba(2, 8, 7, 0.85), transparent 70%);
+}
+
+/* 层1 地形等高线 */
 .bg-terrain {
   position: absolute;
   inset: -6%;
-  opacity: 0.55;
-  animation: terrainDrift 90s ease-in-out infinite alternate;
+  opacity: 0.6;
+  animation: terrainDrift 100s ease-in-out infinite alternate;
 }
 .bg-terrain svg { width: 100%; height: 100%; display: block; }
 @keyframes terrainDrift {
-  from { transform: scale(1) translate3d(0, 0, 0); }
-  to   { transform: scale(1.07) translate3d(-1.4%, -0.9%, 0); }
+  from { transform: scale(1); }
+  to   { transform: scale(1.06) translate3d(-1.3%, -0.7%, 0); }
 }
 
-/* 层 2：数字网格 */
+/* 层2 网格 / 点阵 / 数据流线 */
 .bg-grid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(to right, rgba(150, 255, 225, 0.075) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(150, 255, 225, 0.075) 1px, transparent 1px);
-  background-size: 72px 72px;
-  -webkit-mask-image: radial-gradient(circle at 50% 46%, #000 0%, rgba(0, 0, 0, 0.5) 54%, transparent 82%);
-  mask-image: radial-gradient(circle at 50% 46%, #000 0%, rgba(0, 0, 0, 0.5) 54%, transparent 82%);
+    linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 88px 88px;
+  -webkit-mask-image: radial-gradient(ellipse 62% 62% at 50% 48%, #000 0%, rgba(0, 0, 0, 0.45) 58%, transparent 88%);
+  mask-image: radial-gradient(ellipse 62% 62% at 50% 48%, #000 0%, rgba(0, 0, 0, 0.45) 58%, transparent 88%);
 }
 
-/* 层 3：粒子画布 */
+.bg-dots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.085) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 22%, #000 78%);
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 22%, #000 78%);
+}
+
+.bg-flow { position: absolute; inset: 0; pointer-events: none; }
+.flow-h,
+.flow-v {
+  position: absolute;
+  background: linear-gradient(90deg, transparent, rgba(120, 235, 205, 0.3), transparent);
+}
+.flow-h { height: 1px; left: 4%; right: 4%; }
+.flow-v {
+  width: 1px;
+  top: 6%;
+  bottom: 6%;
+  background: linear-gradient(180deg, transparent, rgba(120, 235, 205, 0.24), transparent);
+}
+.fh1 { top: 21%; animation: flowA 9s ease-in-out infinite; }
+.fh2 { top: 74%; animation: flowA 12s ease-in-out infinite reverse; }
+.fh3 { top: 47%; left: 38%; right: 38%; opacity: 0.5; animation: flowA 7s ease-in-out infinite; }
+.fv1 { left: 19%; animation: flowB 11s ease-in-out infinite; }
+.fv2 { left: 82%; animation: flowB 14s ease-in-out infinite reverse; }
+@keyframes flowA {
+  0%, 100% { opacity: 0.25; }
+  50%      { opacity: 0.85; }
+}
+@keyframes flowB {
+  0%, 100% { opacity: 0.2; }
+  50%      { opacity: 0.7; }
+}
+
+/* 层3 粒子 */
 .bg-particles { position: absolute; inset: 0; }
 .bg-particles canvas { width: 100%; height: 100%; display: block; }
 
-/* 层 4：动物线稿 */
+/* 层4 动物线稿 */
 .bg-animals { position: absolute; inset: 0; pointer-events: none; }
 .bg-animals svg { position: absolute; overflow: visible; }
 .bg-animals path,
 .bg-animals circle {
   fill: none;
-  stroke: rgba(206, 240, 230, 0.5);
-  stroke-width: 1.3;
+  stroke: rgba(226, 245, 238, 0.55);
+  stroke-width: 1.35;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.an-boar     { width: 430px; left: 2%;  bottom: 5%; opacity: 0.17; animation: floatA 26s ease-in-out infinite; }
-.an-macaque  { width: 300px; right: 4%; bottom: 10%; opacity: 0.16; animation: floatB 31s ease-in-out infinite; }
-.an-bird     { width: 240px; right: 10%; top: 10%;  opacity: 0.18; animation: floatA 23s ease-in-out infinite; }
-.an-antelope { width: 400px; left: 2%;  top: 15%;   opacity: 0.16; animation: floatB 29s ease-in-out infinite; }
+.an-boar     { width: 400px; left: 3%;  bottom: 6%;  opacity: 0.2;  animation: floatA 27s ease-in-out infinite; }
+.an-macaque  { width: 250px; right: 6%; bottom: 14%; opacity: 0.17; animation: floatB 33s ease-in-out infinite; }
+.an-bird     { width: 200px; right: 13%; top: 13%;   opacity: 0.17; animation: floatA 24s ease-in-out infinite; }
+.an-antelope { width: 350px; left: 7%;  top: 12%;    opacity: 0.18; animation: floatB 30s ease-in-out infinite; }
 @keyframes floatA {
   0%, 100% { transform: translate3d(0, 0, 0); }
   50%      { transform: translate3d(0, -10px, 0); }
@@ -363,13 +414,13 @@ async function handleLogin() {
   50%      { transform: translate3d(0, 12px, 0); }
 }
 
-/* 层 5：检测框 */
+/* 层5 检测框 */
 .bg-boxes { position: absolute; inset: 0; pointer-events: none; }
 .det-box {
   position: absolute;
-  border: 1px dashed rgba(146, 226, 200, 0.32);
+  border: 1px dashed rgba(180, 240, 220, 0.26);
   border-radius: 2px;
-  animation: boxPulse 7s ease-in-out infinite;
+  animation: boxPulse 8s ease-in-out infinite;
 }
 .det-box::before,
 .det-box::after {
@@ -377,7 +428,7 @@ async function handleLogin() {
   position: absolute;
   width: 7px;
   height: 7px;
-  border: 1px solid rgba(146, 226, 200, 0.55);
+  border: 1px solid rgba(180, 240, 220, 0.45);
 }
 .det-box::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
 .det-box::after  { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
@@ -387,200 +438,184 @@ async function handleLogin() {
   top: -16px;
   font-size: 9px;
   letter-spacing: 0.06em;
-  color: rgba(146, 226, 200, 0.55);
+  color: rgba(180, 240, 220, 0.45);
   white-space: nowrap;
   font-family: ui-monospace, Consolas, monospace;
 }
 @keyframes boxPulse {
-  0%, 100% { opacity: 0.45; }
+  0%, 100% { opacity: 0.4; }
   50%      { opacity: 0.95; }
 }
-.d1 { width: 128px; height: 92px;  left: 24%; top: 63%; animation-delay: 0s; }
-.d2 { width: 96px;  height: 130px; left: 76%; top: 19%; animation-delay: -1.6s; }
-.d3 { width: 150px; height: 84px;  left: 80%; top: 67%; animation-delay: -3.1s; }
-.d4 { width: 84px;  height: 84px;  left: 6%;  top: 41%; animation-delay: -4.4s; }
-.d5 { width: 118px; height: 76px;  left: 61%; top: 7%;  animation-delay: -2.2s; }
-.d6 { width: 74px;  height: 74px;  left: 35%; top: 19%; animation-delay: -5.5s; }
+.d1 { width: 124px; height: 88px;  left: 26%; top: 66%; animation-delay: 0s; }
+.d2 { width: 92px;  height: 124px; left: 78%; top: 22%; animation-delay: -1.8s; }
+.d3 { width: 146px; height: 80px;  left: 82%; top: 70%; animation-delay: -3.3s; }
+.d4 { width: 80px;  height: 80px;  left: 5%;  top: 44%; animation-delay: -4.6s; }
+.d5 { width: 112px; height: 72px;  left: 63%; top: 8%;  animation-delay: -2.4s; }
+.d6 { width: 70px;  height: 70px;  left: 37%; top: 22%; animation-delay: -5.7s; }
 
-/* 层 6：扫描光晕 */
+/* 层6 扫光 + 云雾 */
 .bg-scan {
   position: absolute;
   left: -20%;
   right: -20%;
-  height: 34vh;
-  top: -34vh;
+  height: 40vh;
+  top: -40vh;
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(122, 226, 198, 0.05) 42%,
-    rgba(122, 226, 198, 0.1) 50%,
-    rgba(122, 226, 198, 0.05) 58%,
+    rgba(39, 201, 176, 0.045) 40%,
+    rgba(39, 201, 176, 0.09) 50%,
+    rgba(39, 201, 176, 0.045) 60%,
     transparent 100%
   );
-  animation: scanMove 16s linear infinite;
+  animation: scanMove 20s linear infinite;
   pointer-events: none;
   mix-blend-mode: screen;
 }
 @keyframes scanMove {
   from { transform: translateY(0); }
-  to   { transform: translateY(150vh); }
+  to   { transform: translateY(160vh); }
 }
 
-/* 层 7：云雾 */
 .bg-mist { position: absolute; inset: 0; pointer-events: none; }
 .mist {
   position: absolute;
   border-radius: 50%;
-  filter: blur(60px);
-  background: radial-gradient(circle, rgba(150, 222, 204, 0.16), transparent 70%);
+  filter: blur(70px);
+  background: radial-gradient(circle, rgba(150, 228, 208, 0.14), transparent 70%);
 }
-.m1 { width: 620px; height: 340px; left: -8%; top: 48%;  animation: mistA 44s ease-in-out infinite; }
-.m2 { width: 700px; height: 380px; right: -12%; top: 6%; animation: mistB 52s ease-in-out infinite; }
-.m3 { width: 560px; height: 300px; left: 32%; bottom: -10%; animation: mistA 38s ease-in-out infinite reverse; }
+.m1 { width: 640px; height: 360px; left: -8%; top: 52%;   animation: mistA 46s ease-in-out infinite; }
+.m2 { width: 720px; height: 400px; right: -12%; top: 4%;  animation: mistB 54s ease-in-out infinite; }
+.m3 { width: 580px; height: 320px; left: 34%; bottom: -12%; animation: mistA 40s ease-in-out infinite reverse; }
 @keyframes mistA {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  50%      { transform: translate3d(46px, -22px, 0) scale(1.08); }
+  50%      { transform: translate3d(44px, -20px, 0) scale(1.07); }
 }
 @keyframes mistB {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  50%      { transform: translate3d(-52px, 26px, 0) scale(1.05); }
+  50%      { transform: translate3d(-50px, 24px, 0) scale(1.05); }
 }
 
-/* 层 8：卡片柔光 + 暗角 */
-.bg-halo {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 780px;
-  height: 680px;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(4, 24, 19, 0.72) 0%, rgba(4, 24, 19, 0.4) 46%, transparent 72%);
-  pointer-events: none;
-}
-.bg-vignette {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(2, 12, 9, 0.6) 100%);
-}
-
-/* ══ 玻璃拟态卡片 ══════════════════════════════════════════════ */
+/* ══ 玻璃拟态登录卡片（深色玻璃 + 白字） ═══════════════════════ */
 .login-card {
   position: relative;
   z-index: 10;
   width: 380px;
-  padding: 40px 36px;
+  padding: 42px 38px;
   display: flex;
   flex-direction: column;
-  align-items: center;
   border-radius: 18px;
-  background: linear-gradient(158deg, rgba(255, 255, 255, 0.66) 0%, rgba(228, 249, 241, 0.46) 100%);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
-  backdrop-filter: blur(26px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: linear-gradient(158deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.045) 100%);
+  -webkit-backdrop-filter: blur(30px) saturate(165%);
+  backdrop-filter: blur(30px) saturate(165%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow:
-    0 24px 70px rgba(1, 14, 10, 0.55),
-    0 2px 10px rgba(1, 14, 10, 0.26),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 0 rgba(180, 235, 214, 0.22);
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 26px 76px rgba(0, 10, 8, 0.6),
+    0 0 60px rgba(39, 201, 176, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(39, 201, 176, 0.1);
 }
 
 .login-logo {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
-.logo-icon { font-size: 28px; }
+.logo-icon { font-size: 26px; line-height: 1; }
 
 .logo-title {
-  font-size: 15px;
+  font-size: 15.5px;
   font-weight: 700;
-  color: #08402b;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.4px;
+  color: #ffffff;
+  text-shadow: 0 1px 10px rgba(39, 201, 176, 0.25);
 }
 
 .login-subtitle {
-  font-size: 14px;
-  color: #2b6650;
+  font-size: 13px;
+  color: rgba(226, 245, 238, 0.62);
   font-weight: 400;
-  margin-bottom: 28px;
+  margin-bottom: 30px;
 }
 
 .login-form {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .form-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .form-item label {
-  font-size: 12px;
-  color: #2f6b54;
+  font-size: 12.5px;
+  color: rgba(226, 245, 238, 0.72);
+  letter-spacing: 0.3px;
 }
 
 .form-item input {
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(120, 192, 163, 0.85);
-  border-radius: 6px;
-  color: #14382a;
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 8px;
+  color: #ffffff;
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 
-.form-item input::placeholder { color: #86b09f; }
+.form-item input::placeholder { color: rgba(226, 245, 238, 0.38); }
 
 .form-item input:focus {
-  border-color: #2eb872;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 0 0 3px rgba(46, 184, 114, 0.18);
+  border-color: rgba(39, 201, 176, 0.75);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 0 3px rgba(39, 201, 176, 0.16), 0 0 18px rgba(39, 201, 176, 0.12);
 }
 
-.form-item input:disabled {
-  opacity: 0.6;
-}
+.form-item input:disabled { opacity: 0.6; }
 
 .error-msg {
   padding: 8px 12px;
-  background: rgba(253, 236, 236, 0.9);
-  border: 1px solid #e57373;
-  border-radius: 4px;
-  color: #c62828;
+  background: rgba(198, 40, 40, 0.22);
+  border: 1px solid rgba(229, 115, 115, 0.6);
+  border-radius: 6px;
+  color: #ffd9d9;
   font-size: 13px;
 }
 
 .btn-login {
-  padding: 11px;
-  background: linear-gradient(180deg, #31c07a 0%, #26a866 100%);
-  color: #fff;
+  margin-top: 6px;
+  padding: 12px;
+  background: linear-gradient(135deg, #0f6b5b 0%, #27c9b0 100%);
+  color: #ffffff;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 2px;
   cursor: pointer;
-  margin-top: 4px;
-  box-shadow: 0 6px 18px rgba(38, 168, 102, 0.32);
-  transition: background 0.2s, box-shadow 0.2s, transform 0.12s;
+  box-shadow: 0 8px 24px rgba(15, 107, 91, 0.4);
+  transition: box-shadow 0.25s, transform 0.15s, filter 0.25s;
 }
 
 .btn-login:hover:not(:disabled) {
-  box-shadow: 0 8px 22px rgba(38, 168, 102, 0.44);
+  filter: brightness(1.1);
+  box-shadow: 0 10px 30px rgba(39, 201, 176, 0.45), 0 0 26px rgba(39, 201, 176, 0.32);
   transform: translateY(-1px);
 }
-.btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-login:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .no-register {
-  margin-top: 20px;
-  font-size: 12px;
-  color: #2c6349;
+  margin-top: 22px;
+  font-size: 11.5px;
+  color: rgba(226, 245, 238, 0.42);
   text-align: center;
 }
 </style>
