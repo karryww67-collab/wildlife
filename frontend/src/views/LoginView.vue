@@ -390,28 +390,30 @@ async function handleLogin() {
 .bg-particles { position: absolute; inset: 0; }
 .bg-particles canvas { width: 100%; height: 100%; display: block; }
 
-/* 层4 动物线稿 */
+/* 层4 动物线稿：单色细白线、仅外轮廓、均匀顺滑、暗纹级透明度 */
 .bg-animals { position: absolute; inset: 0; pointer-events: none; }
 .bg-animals svg { position: absolute; overflow: visible; }
 .bg-animals path,
 .bg-animals circle {
   fill: none;
-  stroke: rgba(226, 245, 238, 0.55);
-  stroke-width: 1.35;
+  stroke: rgba(232, 248, 242, 0.85);
+  stroke-width: 1.1;
   stroke-linecap: round;
   stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
-.an-boar     { width: 400px; left: 3%;  bottom: 6%;  opacity: 0.2;  animation: floatA 27s ease-in-out infinite; }
-.an-macaque  { width: 250px; right: 6%; bottom: 14%; opacity: 0.17; animation: floatB 33s ease-in-out infinite; }
-.an-bird     { width: 200px; right: 13%; top: 13%;   opacity: 0.17; animation: floatA 24s ease-in-out infinite; }
-.an-antelope { width: 350px; left: 7%;  top: 12%;    opacity: 0.18; animation: floatB 30s ease-in-out infinite; }
+/* 尺寸差异：羚羊、水鸟偏大；猕猴、野猪偏小。透明度 8%–12% */
+.an-antelope { width: 400px; left: 1%;  top: 10%;   opacity: 0.12; animation: floatB 30s ease-in-out infinite; }
+.an-bird     { width: 320px; right: 2%; top: 11%;   opacity: 0.11; animation: floatA 25s ease-in-out infinite; }
+.an-boar     { width: 260px; left: 2%;  bottom: 5%; opacity: 0.09; animation: floatA 29s ease-in-out infinite; }
+.an-macaque  { width: 220px; right: 4%; bottom: 7%; opacity: 0.08; animation: floatB 34s ease-in-out infinite; }
 @keyframes floatA {
   0%, 100% { transform: translate3d(0, 0, 0); }
-  50%      { transform: translate3d(0, -10px, 0); }
+  50%      { transform: translate3d(0, -9px, 0); }
 }
 @keyframes floatB {
   0%, 100% { transform: translate3d(0, 0, 0); }
-  50%      { transform: translate3d(0, 12px, 0); }
+  50%      { transform: translate3d(0, 11px, 0); }
 }
 
 /* 层5 检测框 */
