@@ -398,12 +398,12 @@ async function handleLogin() {
 }
 /* 大小刻意区分：大（熊/虎）> 中（野猪/羚羊/水鸟）> 小（猕猴） */
 .monkey {
-  left: 0%;
+  left: 18%;
   top: 33%;
   width: 110px;
 }
 .bird {
-  left: 1%;
+  left: 4.5%;
   top: 2%;
   width: 200px;
 }
@@ -413,12 +413,12 @@ async function handleLogin() {
   width: 230px;
 }
 .boar {
-  right: 1%;
+  right: 6%;
   top: 33%;
-  width: 250px;
+  width: 225px;
 }
 .bear {
-  left: -16%;
+  left: -7%;
   bottom: -2%;
   width: 470px;
 }
