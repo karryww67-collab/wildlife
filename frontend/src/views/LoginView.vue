@@ -413,12 +413,12 @@ async function handleLogin() {
   width: 230px;
 }
 .boar {
-  right: 6%;
-  top: 33%;
+  right: 9%;
+  top: 37%;
   width: 225px;
 }
 .bear {
-  left: -7%;
+  left: -3%;
   bottom: -2%;
   width: 470px;
 }
