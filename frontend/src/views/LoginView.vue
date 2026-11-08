@@ -8,7 +8,15 @@
     <!-- 玻璃拟态登录卡片 -->
     <div class="login-card">
       <div class="login-logo">
-        <span class="logo-icon">🐾</span>
+        <span class="logo-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <ellipse cx="12" cy="15.8" rx="5.4" ry="4.6" />
+            <ellipse cx="5.9" cy="9.9" rx="2.2" ry="2.8" />
+            <ellipse cx="10.1" cy="7.5" rx="2.25" ry="2.85" />
+            <ellipse cx="14.5" cy="7.5" rx="2.25" ry="2.85" />
+            <ellipse cx="18.6" cy="9.9" rx="2.2" ry="2.8" />
+          </svg>
+        </span>
         <span class="logo-title">野生动物图像批量识别系统</span>
       </div>
       <h2 class="login-subtitle">后台管理登录</h2>
@@ -116,8 +124,8 @@ async function handleLogin() {
 .login-card {
   position: relative;
   z-index: 10;
-  width: 380px;
-  padding: 42px 38px;
+  width: 440px;
+  padding: 44px 40px;
   display: flex;
   flex-direction: column;
   border-radius: 18px;
@@ -136,17 +144,26 @@ async function handleLogin() {
 .login-logo {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   margin-bottom: 10px;
 }
 
 .logo-icon {
-  font-size: 26px;
-  line-height: 1;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: block;
+}
+.logo-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: #ffffff;
+  display: block;
 }
 
 .logo-title {
-  font-size: 15.5px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.4px;
   color: #ffffff;
@@ -154,9 +171,11 @@ async function handleLogin() {
 }
 
 .login-subtitle {
-  font-size: 13px;
-  color: rgba(226, 245, 238, 0.62);
+  font-size: 14px;
+  color: #ffffff;
   font-weight: 400;
+  text-align: center;
+  letter-spacing: 1px;
   margin-bottom: 30px;
 }
 
@@ -181,9 +200,9 @@ async function handleLogin() {
 
 .form-item input {
   padding: 11px 14px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.17);
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
   color: #ffffff;
   font-size: 14px;
   outline: none;
@@ -222,7 +241,7 @@ async function handleLogin() {
   border-radius: 8px;
   font-size: 14.5px;
   font-weight: 600;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   cursor: pointer;
   box-shadow: 0 8px 24px rgba(15, 107, 91, 0.4);
   transition: box-shadow 0.25s, transform 0.15s, filter 0.25s;
@@ -235,7 +254,7 @@ async function handleLogin() {
 }
 
 .btn-login:disabled {
-  opacity: 0.55;
+  opacity: 0.75;
   cursor: not-allowed;
 }
 
