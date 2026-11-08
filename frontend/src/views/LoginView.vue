@@ -1,40 +1,57 @@
 <template>
   <div class="login-page">
-    <!-- ══════════ 背景层（按 code_20261107 实现） ══════════ -->
+    <!-- ══════════ 背景层（按指定实现，一比一照抄） ══════════ -->
     <div class="login-bg">
-      <!-- 遥感地形底图 -->
-      <div class="bg-terrain"></div>
-
-      <!-- 全局渐变遮罩 -->
-      <div class="bg-gradient"></div>
-
-      <!-- 数字网格 -->
+      <!-- 渐变底色层 -->
+      <div class="bg-base"></div>
+      <!-- 网格层 -->
       <div class="bg-grid"></div>
-
-      <!-- 数据流粒子与扫描线 -->
-      <div class="bg-dataflow">
-        <span class="data-particle"></span>
-        <span class="data-particle"></span>
-        <span class="data-particle"></span>
-        <span class="scan-line"></span>
+      <!-- YOLO虚线框 -->
+      <div class="yolo-group">
+        <div class="yolo"></div>
+        <div class="yolo"></div>
+        <div class="yolo"></div>
       </div>
 
-      <!-- YOLO 目标检测虚线框 -->
-      <div class="yolo-box-group">
-        <div class="yolo-box yolo-box-1"></div>
-        <div class="yolo-box yolo-box-2"></div>
-        <div class="yolo-box yolo-box-3"></div>
-        <div class="yolo-box yolo-box-4"></div>
-      </div>
-
-      <!-- 野生动物线稿暗纹（从参考图提取：仅保留亮线，背景透明） -->
-      <img class="animal-silhouette macaque" src="../assets/animals/macaque.png" alt="" />
-      <img class="animal-silhouette heron" src="../assets/animals/heron.png" alt="" />
-      <img class="animal-silhouette antelope" src="../assets/animals/antelope.png" alt="" />
-      <img class="animal-silhouette boar" src="../assets/animals/boar.png" alt="" />
+      <!-- 猕猴 单线轮廓 -->
+      <svg class="animal monkey" viewBox="0 0 100 90">
+        <path
+          d="M30,20 C20,25 22,38 32,42 C42,46 52,44 58,36 C62,28 54,20 44,20 Z M32,42 L30,70 M58,36 L60,70 M60,50 C72,48 78,58 72,72"
+          fill="none"
+          stroke="#fff"
+          stroke-width="0.7"
+        />
+      </svg>
+      <!-- 涉禽水鸟 -->
+      <svg class="animal bird" viewBox="0 0 110 90">
+        <path
+          d="M50,15 C40,25 42,40 50,48 C60,54 72,48 78,42 M50,48 L48,80 M72,48 L74,80"
+          fill="none"
+          stroke="#fff"
+          stroke-width="0.7"
+        />
+      </svg>
+      <!-- 羚羊 -->
+      <svg class="animal antelope" viewBox="0 0 120 90">
+        <path
+          d="M40,25 C30,10 22,14 30,26 C36,32 50,30 64,34 C74,38 76,50 72,62 M50,32 L48,78 M70,36 L72,78"
+          fill="none"
+          stroke="#fff"
+          stroke-width="0.7"
+        />
+      </svg>
+      <!-- 野猪 -->
+      <svg class="animal boar" viewBox="0 0 100 90">
+        <path
+          d="M20,40 C14,44 16,54 26,56 C46,54 66,56 74,52 C78,58 76,66 70,68 M28,56 L26,78 M68,54 L70,78"
+          fill="none"
+          stroke="#fff"
+          stroke-width="0.7"
+        />
+      </svg>
     </div>
 
-    <!-- ══════════ 玻璃拟态登录卡片 ══════════ -->
+    <!-- ══════════ 登录卡片（z-index:10，浮在背景之上） ══════════ -->
     <div class="login-card">
       <div class="login-logo">
         <span class="logo-icon">🐾</span>
@@ -112,7 +129,7 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-/* ══ 页面容器：居中承载卡片，背景层绝对定位填充 ══════════════ */
+/* ══ 页面容器：背景铺满、卡片居中 ════════════════════════════ */
 .login-page {
   position: relative;
   width: 100%;
@@ -123,7 +140,7 @@ async function handleLogin() {
   justify-content: center;
 }
 
-/* ══ 外层背景容器 ══════════════════════════════════════════════ */
+/* ══ 背景层 ══════════════════════════════════════════════════ */
 .login-bg {
   position: absolute;
   inset: 0;
@@ -131,196 +148,79 @@ async function handleLogin() {
   height: 100%;
   overflow: hidden;
   z-index: 0;
-}
-
-/* 第一层：遥感地形底图 */
-.bg-terrain {
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    radial-gradient(circle at 70% 60%, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(135deg, #07453a 0%, #0f6b5b 45%, #1b9986 100%);
-  background-size: 3px 3px, 2px 2px, 100% 100%;
-  filter: blur(0.4px);
-  opacity: 0.85;
-}
-
-/* 第二层：深青绿色渐变遮罩，四角更深 */
-.bg-gradient {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 50% 50%, rgba(27, 153, 134, 0.35) 0%, rgba(7, 69, 58, 0.85) 70%),
-    linear-gradient(135deg, #06352c 0%, #0c5a4d 50%, #07453a 100%);
-  opacity: 0.9;
-}
-
-/* 第三层：数字网格 */
-.bg-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 55px 55px;
-  opacity: 0.55;
-  mask-image: radial-gradient(ellipse at 50% 50%, black 40%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 40%, transparent 75%);
-}
-
-/* 第四层：数据流粒子与扫描线 */
-.bg-dataflow {
-  position: absolute;
-  inset: 0;
-  opacity: 0.35;
-}
-
-.data-particle {
-  position: absolute;
-  width: 2px;
-  height: 2px;
-  background: rgba(52, 226, 201, 0.75);
-  border-radius: 50%;
-  box-shadow: 0 0 8px rgba(52, 226, 201, 0.45);
-}
-
-.data-particle:nth-child(1) {
-  top: 18%;
-  left: 26%;
-  animation: float 9s infinite ease-in-out;
-}
-
-.data-particle:nth-child(2) {
-  top: 64%;
-  left: 72%;
-  animation: float 11s infinite ease-in-out 2s;
-}
-
-.data-particle:nth-child(3) {
-  top: 42%;
-  left: 44%;
-  animation: float 13s infinite ease-in-out 4s;
-}
-
-.scan-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 30%;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(52, 226, 201, 0.35),
-    rgba(52, 226, 201, 0.55),
-    rgba(52, 226, 201, 0.35),
-    transparent
-  );
-  animation: scan 7s infinite linear;
-}
-
-/* 第五层：YOLO 虚线检测框 */
-.yolo-box-group {
-  position: absolute;
-  inset: 0;
   pointer-events: none;
 }
-
-.yolo-box {
+/* 底层渐变：深森林青绿色，四角更深，中心亮 */
+.bg-base {
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(ellipse at center, #15806f 0%, #09443a 100%);
   position: absolute;
-  border: 1px dashed rgba(255, 255, 255, 0.12);
+}
+/* 网格层，淡淡的白色网格 */
+.bg-grid {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+/* YOLO虚线检测框 */
+.yolo-group {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+}
+.yolo {
+  position: absolute;
+  border: 1px dashed rgba(255, 255, 255, 0.09);
   border-radius: 2px;
 }
-
-.yolo-box-1 {
-  top: 16%;
-  left: 28%;
-  width: 90px;
-  height: 64px;
+.yolo:nth-child(1) {
+  top: 20%;
+  left: 25%;
+  width: 85px;
+  height: 60px;
 }
-
-.yolo-box-2 {
-  top: 24%;
-  right: 22%;
-  width: 72px;
-  height: 52px;
+.yolo:nth-child(2) {
+  top: 25%;
+  right: 24%;
+  width: 70px;
+  height: 50px;
 }
-
-.yolo-box-3 {
-  bottom: 28%;
-  left: 18%;
-  width: 110px;
-  height: 78px;
+.yolo:nth-child(3) {
+  bottom: 22%;
+  left: 20%;
+  width: 95px;
+  height: 65px;
 }
-
-.yolo-box-4 {
-  bottom: 18%;
-  right: 30%;
-  width: 82px;
-  height: 58px;
-}
-
-/* 动物线稿暗纹：统一外轮廓单线，无填充、无内部纹理 */
-.animal-silhouette {
+/* 动物统一样式：10%透明度，纯白单线，无填充 */
+.animal {
   position: absolute;
-  height: auto;
-  pointer-events: none;
-  opacity: 0.12;
-  user-select: none;
+  width: 140px;
+  height: 110px;
+  opacity: 0.1;
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 0.7;
 }
-
-/* 猕猴：坐姿侧视（左上） */
-.macaque {
-  width: 300px;
-  left: 2%;
-  top: 5%;
+.monkey {
+  left: 7%;
+  bottom: 10%;
 }
-
-/* 水鸟：S 颈长腿（右上） */
-.heron {
-  width: 300px;
-  right: 2%;
-  top: 4%;
+.bird {
+  left: 11%;
+  top: 11%;
 }
-
-/* 羚羊：后掠长角（左下） */
 .antelope {
-  width: 400px;
-  left: 1%;
-  bottom: 2%;
+  right: 9%;
+  top: 9%;
 }
-
-/* 野猪：敦实拱嘴（右下） */
 .boar {
-  width: 420px;
-  right: 1%;
-  bottom: 4%;
-}
-/* 扫描线动画 */
-@keyframes scan {
-  0% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(120px);
-  }
-  100% {
-    transform: translateY(0);
-  }
-}
-
-/* 粒子浮动动画 */
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0) translateX(0);
-    opacity: 0.4;
-  }
-  50% {
-    transform: translateY(-18px) translateX(10px);
-    opacity: 0.8;
-  }
+  right: 7%;
+  bottom: 11%;
 }
 
 /* ══ 玻璃拟态登录卡片 ══════════════════════════════════════════ */
@@ -332,7 +232,7 @@ async function handleLogin() {
   display: flex;
   flex-direction: column;
   border-radius: 18px;
-  background: linear-gradient(158deg, rgba(4, 26, 22, 0.62) 0%, rgba(4, 26, 22, 0.40) 100%);
+  background: linear-gradient(158deg, rgba(4, 26, 22, 0.62) 0%, rgba(4, 26, 22, 0.4) 100%);
   -webkit-backdrop-filter: blur(30px) saturate(165%);
   backdrop-filter: blur(30px) saturate(165%);
   border: 1px solid rgba(255, 255, 255, 0.22);
