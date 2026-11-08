@@ -5,8 +5,10 @@
       <!-- 第 1 层：深森林青绿全局渐变，四角深、中心亮 -->
       <div class="bg-base"></div>
 
-      <!-- 第 2 层：遥感山林地形底图（等高线，JS 生成） -->
-      <div class="bg-terrain">
+      <!-- 第 2 层：遥感山林地形底图（真实卫星地形影像） -->
+      <div class="bg-terrain"></div>
+      <!-- 第 2b 层：地形等高线 -->
+      <div class="bg-contour">
         <svg ref="terrainSvg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice"></svg>
       </div>
 
@@ -281,13 +283,21 @@ async function handleLogin() {
     linear-gradient(160deg, #05130f 0%, #0a3028 48%, #051210 100%);
 }
 
-/* ── 第 2 层：遥感山林地形底图 ────────────────────────────── */
+/* ── 第 2 层：遥感山林地形底图（真实卫星地形）─────────────── */
 .bg-terrain {
   position: absolute;
-  inset: -6%;
-  opacity: 0.75;
+  inset: 0;
+  background: url("../assets/terrain.jpg") center center / cover no-repeat;
+  opacity: 0.42;
+  filter: blur(0.4px);
 }
-.bg-terrain svg {
+/* ── 第 2b 层：地形等高线 ────────────────────────────────── */
+.bg-contour {
+  position: absolute;
+  inset: -6%;
+  opacity: 0.6;
+}
+.bg-contour svg {
   width: 100%;
   height: 100%;
   display: block;
