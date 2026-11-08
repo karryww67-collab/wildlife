@@ -136,9 +136,9 @@ async function handleLogin() {
   display: flex;
   flex-direction: column;
   border-radius: 18px;
-  background: linear-gradient(158deg, rgba(6, 30, 25, 0.38) 0%, rgba(6, 30, 25, 0.18) 100%);
-  -webkit-backdrop-filter: blur(34px) saturate(170%);
-  backdrop-filter: blur(34px) saturate(170%);
+  background: linear-gradient(158deg, rgba(6, 30, 25, 0.26) 0%, rgba(6, 30, 25, 0.10) 100%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
   border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.05),
