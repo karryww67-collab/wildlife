@@ -1,27 +1,56 @@
 <template>
   <div class="login-page">
-    <!-- ══════════ 背景层（按指定实现，一比一照抄） ══════════ -->
+    <!-- ══════════ 背景层（自底向上严格叠加） ══════════ -->
     <div class="login-bg">
-      <!-- 渐变底色层 -->
+      <!-- 第 1 层：深森林青绿全局渐变，四角深、中心亮 -->
       <div class="bg-base"></div>
-      <!-- 网格层 -->
-      <div class="bg-grid"></div>
-      <!-- YOLO虚线框 -->
-      <div class="yolo-group">
-        <div class="yolo"></div>
-        <div class="yolo"></div>
-        <div class="yolo"></div>
+
+      <!-- 第 2 层：遥感山林地形底图（等高线，JS 生成） -->
+      <div class="bg-terrain">
+        <svg ref="terrainSvg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice"></svg>
       </div>
 
-      <!-- 动物线稿（从参考图提取，背景透明；位图无渲染变形）
-           左上猕猴 / 右上水鸟 / 左下羚羊 / 右下野猪 -->
+      <!-- 第 3 层：数字网格 + 点阵 + 数据流线 + 粒子 -->
+      <div class="bg-grid"></div>
+      <div class="bg-dots"></div>
+      <div class="bg-flow">
+        <div class="flow-h fh1"></div>
+        <div class="flow-h fh2"></div>
+        <div class="flow-h fh3"></div>
+        <div class="flow-v fv1"></div>
+        <div class="flow-v fv2"></div>
+      </div>
+      <div class="bg-particles">
+        <canvas ref="particlesCanvas"></canvas>
+      </div>
+
+      <!-- 第 4 层：散落的 YOLO 虚线检测框 -->
+      <div class="bg-yolo">
+        <div class="yolo y1"></div>
+        <div class="yolo y2"></div>
+        <div class="yolo y3"></div>
+        <div class="yolo y4"></div>
+        <div class="yolo y5"></div>
+        <div class="yolo y6"></div>
+      </div>
+
+      <!-- 第 5 层：细白单线动物轮廓（真实手绘线稿，位图无渲染变形） -->
       <img class="animal monkey" src="../assets/animals/macaque.png" alt="" />
       <img class="animal bird" src="../assets/animals/heron.png" alt="" />
       <img class="animal antelope" src="../assets/animals/antelope.png" alt="" />
       <img class="animal boar" src="../assets/animals/boar.png" alt="" />
+
+      <!-- 第 6 层：微弱扫光 + 云雾 + 暗角 -->
+      <div class="bg-scan"></div>
+      <div class="bg-mist">
+        <div class="mist m1"></div>
+        <div class="mist m2"></div>
+        <div class="mist m3"></div>
+      </div>
+      <div class="bg-vignette"></div>
     </div>
 
-    <!-- ══════════ 登录卡片（z-index:10，浮在背景之上） ══════════ -->
+    <!-- ══════════ 玻璃拟态登录卡片 ══════════ -->
     <div class="login-card">
       <div class="login-logo">
         <span class="logo-icon">🐾</span>
@@ -64,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { login, setToken, removeToken } from '@/api'
 
@@ -76,9 +105,132 @@ const password = ref('')
 const loading = ref(false)
 const errorMsg = ref('')
 
-// 每次到登录页都清除旧 token，强制重新登录
+const terrainSvg = ref<SVGSVGElement | null>(null)
+const particlesCanvas = ref<HTMLCanvasElement | null>(null)
+
+let rafId = 0
+let detachResize: (() => void) | null = null
+
+/* ── 遥感地形底图：以若干山丘为中心的闭合等高线 ────────────────── */
+function buildTerrain() {
+  const svg = terrainSvg.value
+  if (!svg) return
+  const NS = 'http://www.w3.org/2000/svg'
+  const centers = [
+    { x: 300, y: 240, r: 290, seed: 1.2 },
+    { x: 1140, y: 680, r: 340, seed: 3.7 },
+    { x: 780, y: 90, r: 210, seed: 5.4 },
+    { x: 110, y: 800, r: 190, seed: 7.9 },
+  ]
+  let d = ''
+  for (const c of centers) {
+    for (let ring = 1; ring <= 9; ring++) {
+      const base = (c.r / 9) * ring
+      const pts: string[] = []
+      for (let i = 0; i < 96; i++) {
+        const t = (i / 96) * Math.PI * 2
+        const wob =
+          0.2 * Math.sin(3 * t + c.seed) +
+          0.12 * Math.sin(5 * t + c.seed * 2.3) +
+          0.07 * Math.sin(9 * t + c.seed * 3.1)
+        const rr = base * (1 + wob)
+        pts.push(
+          (c.x + Math.cos(t) * rr * 1.35).toFixed(1) + ' ' +
+          (c.y + Math.sin(t) * rr * 0.86).toFixed(1)
+        )
+      }
+      d += 'M' + pts.join('L') + 'Z'
+    }
+  }
+  const path = document.createElementNS(NS, 'path')
+  path.setAttribute('d', d)
+  path.setAttribute('fill', 'none')
+  path.setAttribute('stroke', 'rgba(190, 238, 224, 0.14)')
+  path.setAttribute('stroke-width', '1')
+  svg.appendChild(path)
+}
+
+/* ── 数据流粒子 ────────────────────────────────────────────────── */
+function startParticles() {
+  const cv = particlesCanvas.value
+  if (!cv) return
+  const ctx = cv.getContext('2d')
+  if (!ctx) return
+
+  let W = 0
+  let H = 0
+  const DPR = Math.min(window.devicePixelRatio || 1, 2)
+  const N = 40
+  const pts: { x: number; y: number; vx: number; vy: number; r: number }[] = []
+
+  const resize = () => {
+    W = cv.clientWidth
+    H = cv.clientHeight
+    cv.width = Math.round(W * DPR)
+    cv.height = Math.round(H * DPR)
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0)
+  }
+  resize()
+  window.addEventListener('resize', resize)
+  detachResize = () => window.removeEventListener('resize', resize)
+
+  for (let i = 0; i < N; i++) {
+    pts.push({
+      x: Math.random() * 1440,
+      y: Math.random() * 900,
+      vx: (Math.random() - 0.5) * 0.12,
+      vy: (Math.random() - 0.5) * 0.12,
+      r: 0.6 + Math.random() * 1.0,
+    })
+  }
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  const frame = () => {
+    ctx.clearRect(0, 0, W, H)
+    for (const p of pts) {
+      if (!reduced) {
+        p.x += p.vx
+        p.y += p.vy
+        if (p.x < -20) p.x = W + 20
+        if (p.x > W + 20) p.x = -20
+        if (p.y < -20) p.y = H + 20
+        if (p.y > H + 20) p.y = -20
+      }
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(170, 238, 214, 0.38)'
+      ctx.fill()
+    }
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const dx = pts[i].x - pts[j].x
+        const dy = pts[i].y - pts[j].y
+        const d2 = dx * dx + dy * dy
+        if (d2 < 24000) {
+          ctx.strokeStyle = 'rgba(150, 226, 200, ' + ((1 - d2 / 24000) * 0.08).toFixed(3) + ')'
+          ctx.lineWidth = 0.7
+          ctx.beginPath()
+          ctx.moveTo(pts[i].x, pts[i].y)
+          ctx.lineTo(pts[j].x, pts[j].y)
+          ctx.stroke()
+        }
+      }
+    }
+    rafId = requestAnimationFrame(frame)
+  }
+  rafId = requestAnimationFrame(frame)
+}
+
 onMounted(() => {
   removeToken()
+  buildTerrain()
+  startParticles()
+})
+
+onBeforeUnmount(() => {
+  if (rafId) cancelAnimationFrame(rafId)
+  if (detachResize) detachResize()
 })
 
 async function handleLogin() {
@@ -99,7 +251,7 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-/* ══ 页面容器：背景铺满、卡片居中 ════════════════════════════ */
+/* ══ 页面容器 ════════════════════════════════════════════════ */
 .login-page {
   position: relative;
   width: 100%;
@@ -110,7 +262,6 @@ async function handleLogin() {
   justify-content: center;
 }
 
-/* ══ 背景层 ══════════════════════════════════════════════════ */
 .login-bg {
   position: absolute;
   inset: 0;
@@ -120,80 +271,194 @@ async function handleLogin() {
   z-index: 0;
   pointer-events: none;
 }
-/* 底层渐变：深森林青绿色，四角更深，中心亮 */
+
+/* ── 第 1 层：全局渐变，四角深、中心亮 ───────────────────── */
 .bg-base {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 920px 640px at 50% 46%, rgba(39, 201, 176, 0.2) 0%, rgba(15, 107, 91, 0.13) 44%, transparent 70%),
+    linear-gradient(160deg, #05130f 0%, #0a3028 48%, #051210 100%);
+}
+
+/* ── 第 2 层：遥感山林地形底图 ────────────────────────────── */
+.bg-terrain {
+  position: absolute;
+  inset: -6%;
+  opacity: 0.75;
+}
+.bg-terrain svg {
   width: 100%;
   height: 100%;
-  background: radial-gradient(ellipse at center, #15806f 0%, #09443a 100%);
-  position: absolute;
+  display: block;
 }
-/* 网格层，淡淡的白色网格 */
+
+/* ── 第 3 层：网格 + 点阵 + 数据流线 + 粒子 ───────────────── */
 .bg-grid {
-  width: 100%;
-  height: 100%;
   position: absolute;
+  inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 60px 60px;
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 62px 62px;
+  -webkit-mask-image: radial-gradient(ellipse 66% 66% at 50% 48%, #000 0%, rgba(0, 0, 0, 0.5) 56%, transparent 86%);
+  mask-image: radial-gradient(ellipse 66% 66% at 50% 48%, #000 0%, rgba(0, 0, 0, 0.5) 56%, transparent 86%);
 }
-/* YOLO虚线检测框 */
-.yolo-group {
+
+.bg-dots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, transparent 24%, #000 78%);
+  mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, transparent 24%, #000 78%);
+}
+
+.bg-flow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.flow-h,
+.flow-v {
+  position: absolute;
+  background: linear-gradient(90deg, transparent, rgba(120, 235, 205, 0.28), transparent);
+}
+.flow-h {
+  height: 1px;
+  left: 4%;
+  right: 4%;
+}
+.flow-v {
+  width: 1px;
+  top: 6%;
+  bottom: 6%;
+  background: linear-gradient(180deg, transparent, rgba(120, 235, 205, 0.22), transparent);
+}
+.fh1 { top: 22%; animation: flowA 9s ease-in-out infinite; }
+.fh2 { top: 73%; animation: flowA 12s ease-in-out infinite reverse; }
+.fh3 { top: 47%; left: 38%; right: 38%; opacity: 0.5; animation: flowA 7s ease-in-out infinite; }
+.fv1 { left: 19%; animation: flowB 11s ease-in-out infinite; }
+.fv2 { left: 82%; animation: flowB 14s ease-in-out infinite reverse; }
+@keyframes flowA {
+  0%, 100% { opacity: 0.22; }
+  50%      { opacity: 0.8; }
+}
+@keyframes flowB {
+  0%, 100% { opacity: 0.18; }
+  50%      { opacity: 0.62; }
+}
+
+.bg-particles {
+  position: absolute;
+  inset: 0;
+}
+.bg-particles canvas {
   width: 100%;
   height: 100%;
+  display: block;
+}
+
+/* ── 第 4 层：YOLO 虚线检测框 ─────────────────────────────── */
+.bg-yolo {
   position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 .yolo {
   position: absolute;
-  border: 1px dashed rgba(255, 255, 255, 0.09);
+  border: 1px dashed rgba(220, 245, 236, 0.16);
   border-radius: 2px;
 }
-.yolo:nth-child(1) {
-  top: 20%;
-  left: 25%;
-  width: 85px;
-  height: 60px;
-}
-.yolo:nth-child(2) {
-  top: 25%;
-  right: 24%;
-  width: 70px;
-  height: 50px;
-}
-.yolo:nth-child(3) {
-  bottom: 22%;
-  left: 20%;
-  width: 95px;
-  height: 65px;
-}
-/* 动物统一样式：10%透明度，纯白单线，无填充 */
+.y1 { top: 17%; left: 27%; width: 92px; height: 66px; }
+.y2 { top: 24%; right: 21%; width: 74px; height: 54px; }
+.y3 { bottom: 26%; left: 19%; width: 104px; height: 72px; }
+.y4 { bottom: 17%; right: 29%; width: 84px; height: 60px; }
+.y5 { top: 42%; left: 8%; width: 62px; height: 46px; }
+.y6 { bottom: 40%; right: 10%; width: 70px; height: 50px; }
+
+/* ── 第 5 层：动物线稿（真实手绘线稿，位图无变形） ─────────── */
 .animal {
   position: absolute;
   height: auto;
-  opacity: 0.32;
-  pointer-events: none;
+  opacity: 0.3;
   user-select: none;
 }
 .monkey {
-  left: 7%;
-  bottom: 10%;
+  left: 6%;
+  bottom: 9%;
   width: 250px;
 }
 .bird {
-  left: 11%;
+  left: 9%;
   top: 11%;
   width: 270px;
 }
 .antelope {
-  right: 9%;
+  right: 8%;
   top: 9%;
   width: 300px;
 }
 .boar {
-  right: 7%;
-  bottom: 11%;
+  right: 6%;
+  bottom: 10%;
   width: 380px;
 }
+
+/* ── 第 6 层：扫光 / 云雾 / 暗角 ──────────────────────────── */
+.bg-scan {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  height: 38vh;
+  top: -38vh;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(39, 201, 176, 0.04) 40%,
+    rgba(39, 201, 176, 0.085) 50%,
+    rgba(39, 201, 176, 0.04) 60%,
+    transparent 100%
+  );
+  animation: scanMove 20s linear infinite;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+@keyframes scanMove {
+  from { transform: translateY(0); }
+  to   { transform: translateY(160vh); }
+}
+
+.bg-mist {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.mist {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  background: radial-gradient(circle, rgba(150, 228, 208, 0.13), transparent 70%);
+}
+.m1 { width: 640px; height: 360px; left: -8%;   top: 52%;    animation: mistA 46s ease-in-out infinite; }
+.m2 { width: 720px; height: 400px; right: -12%; top: 4%;     animation: mistB 54s ease-in-out infinite; }
+.m3 { width: 580px; height: 320px; left: 34%;   bottom: -12%; animation: mistA 40s ease-in-out infinite reverse; }
+@keyframes mistA {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(44px, -20px, 0) scale(1.07); }
+}
+@keyframes mistB {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(-50px, 24px, 0) scale(1.05); }
+}
+
+.bg-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, transparent 38%, rgba(2, 10, 8, 0.62) 100%);
+}
+
 /* ══ 玻璃拟态登录卡片 ══════════════════════════════════════════ */
 .login-card {
   position: relative;
@@ -203,13 +468,13 @@ async function handleLogin() {
   display: flex;
   flex-direction: column;
   border-radius: 18px;
-  background: linear-gradient(158deg, rgba(4, 26, 22, 0.62) 0%, rgba(4, 26, 22, 0.4) 100%);
+  background: linear-gradient(158deg, rgba(6, 30, 25, 0.58) 0%, rgba(6, 30, 25, 0.36) 100%);
   -webkit-backdrop-filter: blur(30px) saturate(165%);
   backdrop-filter: blur(30px) saturate(165%);
   border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 26px 76px rgba(0, 12, 10, 0.55),
+    0 26px 76px rgba(0, 12, 10, 0.5),
     0 0 70px rgba(39, 201, 176, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 0 rgba(39, 201, 176, 0.12);
