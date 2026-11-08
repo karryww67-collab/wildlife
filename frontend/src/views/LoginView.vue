@@ -9,12 +9,19 @@
     <div class="login-card">
       <div class="login-logo">
         <span class="logo-icon">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <ellipse cx="12" cy="15.8" rx="5.4" ry="4.6" />
-            <ellipse cx="5.9" cy="9.9" rx="2.2" ry="2.8" />
-            <ellipse cx="10.1" cy="7.5" rx="2.25" ry="2.85" />
-            <ellipse cx="14.5" cy="7.5" rx="2.25" ry="2.85" />
-            <ellipse cx="18.6" cy="9.9" rx="2.2" ry="2.8" />
+          <svg viewBox="0 0 34 26" aria-hidden="true">
+            <!-- 后脚印（大，左上） -->
+            <ellipse cx="9.4" cy="16.4" rx="5.1" ry="4.3" />
+            <ellipse cx="4.3" cy="10.6" rx="2.0" ry="2.6" />
+            <ellipse cx="8.1" cy="8.4" rx="2.1" ry="2.7" />
+            <ellipse cx="12.2" cy="8.4" rx="2.1" ry="2.7" />
+            <ellipse cx="16.0" cy="10.6" rx="2.0" ry="2.6" />
+            <!-- 前脚印（小，右下） -->
+            <ellipse cx="25.0" cy="21.2" rx="3.9" ry="3.3" />
+            <ellipse cx="21.1" cy="16.9" rx="1.6" ry="2.0" />
+            <ellipse cx="24.0" cy="15.4" rx="1.6" ry="2.1" />
+            <ellipse cx="27.1" cy="15.4" rx="1.6" ry="2.1" />
+            <ellipse cx="30.0" cy="16.9" rx="1.6" ry="2.0" />
           </svg>
         </span>
         <span class="logo-title">野生动物图像批量识别系统</span>
@@ -129,9 +136,9 @@ async function handleLogin() {
   display: flex;
   flex-direction: column;
   border-radius: 18px;
-  background: linear-gradient(158deg, rgba(6, 30, 25, 0.58) 0%, rgba(6, 30, 25, 0.36) 100%);
-  -webkit-backdrop-filter: blur(30px) saturate(165%);
-  backdrop-filter: blur(30px) saturate(165%);
+  background: linear-gradient(158deg, rgba(6, 30, 25, 0.38) 0%, rgba(6, 30, 25, 0.18) 100%);
+  -webkit-backdrop-filter: blur(34px) saturate(170%);
+  backdrop-filter: blur(34px) saturate(170%);
   border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.05),
@@ -150,8 +157,8 @@ async function handleLogin() {
 }
 
 .logo-icon {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 27px;
   flex: 0 0 auto;
   display: block;
 }
