@@ -41,6 +41,8 @@
       <img class="animal bird" src="../assets/animals/heron.png" alt="" />
       <img class="animal antelope" src="../assets/animals/antelope.png" alt="" />
       <img class="animal boar" src="../assets/animals/boar.png" alt="" />
+      <img class="animal bear" src="../assets/animals/bear.png" alt="" />
+      <img class="animal tiger" src="../assets/animals/tiger.png" alt="" />
 
       <!-- 第 6 层：微弱扫光 + 云雾 + 暗角 -->
       <div class="bg-scan"></div>
@@ -394,25 +396,36 @@ async function handleLogin() {
   opacity: 0.3;
   user-select: none;
 }
+/* 大小刻意区分：大（熊/虎）> 中（野猪/羚羊/水鸟）> 小（猕猴） */
 .monkey {
-  left: 6%;
-  bottom: 9%;
-  width: 250px;
+  left: 0%;
+  top: 33%;
+  width: 110px;
 }
 .bird {
-  left: 9%;
-  top: 11%;
-  width: 270px;
+  left: 1%;
+  top: 2%;
+  width: 200px;
 }
 .antelope {
-  right: 8%;
-  top: 9%;
-  width: 300px;
+  right: 1%;
+  top: 2%;
+  width: 230px;
 }
 .boar {
-  right: 6%;
-  bottom: 10%;
-  width: 380px;
+  right: 1%;
+  top: 33%;
+  width: 250px;
+}
+.bear {
+  left: -16%;
+  bottom: -2%;
+  width: 470px;
+}
+.tiger {
+  right: -4%;
+  bottom: -3%;
+  width: 400px;
 }
 
 /* ── 第 6 层：扫光 / 云雾 / 暗角 ──────────────────────────── */
