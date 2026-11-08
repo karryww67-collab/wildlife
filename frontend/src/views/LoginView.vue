@@ -13,42 +13,12 @@
         <div class="yolo"></div>
       </div>
 
-      <!-- 猕猴 单线轮廓 -->
-      <svg class="animal monkey" viewBox="0 0 100 90">
-        <path
-          d="M30,20 C20,25 22,38 32,42 C42,46 52,44 58,36 C62,28 54,20 44,20 Z M32,42 L30,70 M58,36 L60,70 M60,50 C72,48 78,58 72,72"
-          fill="none"
-          stroke="#fff"
-          stroke-width="0.7"
-        />
-      </svg>
-      <!-- 涉禽水鸟 -->
-      <svg class="animal bird" viewBox="0 0 110 90">
-        <path
-          d="M50,15 C40,25 42,40 50,48 C60,54 72,48 78,42 M50,48 L48,80 M72,48 L74,80"
-          fill="none"
-          stroke="#fff"
-          stroke-width="0.7"
-        />
-      </svg>
-      <!-- 羚羊 -->
-      <svg class="animal antelope" viewBox="0 0 120 90">
-        <path
-          d="M40,25 C30,10 22,14 30,26 C36,32 50,30 64,34 C74,38 76,50 72,62 M50,32 L48,78 M70,36 L72,78"
-          fill="none"
-          stroke="#fff"
-          stroke-width="0.7"
-        />
-      </svg>
-      <!-- 野猪 -->
-      <svg class="animal boar" viewBox="0 0 100 90">
-        <path
-          d="M20,40 C14,44 16,54 26,56 C46,54 66,56 74,52 C78,58 76,66 70,68 M28,56 L26,78 M68,54 L70,78"
-          fill="none"
-          stroke="#fff"
-          stroke-width="0.7"
-        />
-      </svg>
+      <!-- 动物线稿（从参考图提取，背景透明；位图无渲染变形）
+           左上猕猴 / 右上水鸟 / 左下羚羊 / 右下野猪 -->
+      <img class="animal monkey" src="../assets/animals/macaque.png" alt="" />
+      <img class="animal bird" src="../assets/animals/heron.png" alt="" />
+      <img class="animal antelope" src="../assets/animals/antelope.png" alt="" />
+      <img class="animal boar" src="../assets/animals/boar.png" alt="" />
     </div>
 
     <!-- ══════════ 登录卡片（z-index:10，浮在背景之上） ══════════ -->
@@ -199,30 +169,31 @@ async function handleLogin() {
 /* 动物统一样式：10%透明度，纯白单线，无填充 */
 .animal {
   position: absolute;
-  width: 140px;
-  height: 110px;
-  opacity: 0.1;
-  fill: none;
-  stroke: #ffffff;
-  stroke-width: 0.7;
+  height: auto;
+  opacity: 0.32;
+  pointer-events: none;
+  user-select: none;
 }
 .monkey {
   left: 7%;
   bottom: 10%;
+  width: 250px;
 }
 .bird {
   left: 11%;
   top: 11%;
+  width: 270px;
 }
 .antelope {
   right: 9%;
   top: 9%;
+  width: 300px;
 }
 .boar {
   right: 7%;
   bottom: 11%;
+  width: 380px;
 }
-
 /* ══ 玻璃拟态登录卡片 ══════════════════════════════════════════ */
 .login-card {
   position: relative;
