@@ -114,94 +114,94 @@ html * {
   --chart-12: #B76A78;
 }
 
-/* ── 主题 2：卡通动物（暖色系，与 forest 的冷绿形成明显区分） ── */
+/* ── 主题 2：卡通动物（柔和暖色系，低饱和奶油陶土调） ── */
 [data-theme="cartoon"] {
-  /* 背景：奶油暖白 */
-  --bg-primary: #FFF8EE;
+  /* 背景：柔和奶油（比上一版少一点黄、更接近纸白） */
+  --bg-primary: #FDF8F2;
   --bg-header-start: #FFFFFF;
-  --bg-header-end: #FFF0DC;
+  --bg-header-end: #FBEFE1;
   --bg-panel: rgba(255, 255, 255, 0.9);
   --bg-card: #FFFFFF;
-  --bg-card-hover: #FFF7EC;
-  --bg-card-active: #FFE8C8;
-  --bg-track: #F2E0C8;
+  --bg-card-hover: #FDF5EB;
+  --bg-card-active: #F9E7D2;
+  --bg-track: #EEE0CE;
   --bg-nav-start: #FFFFFF;
-  --bg-nav-end: #FFF0DC;
-  --bg-badge-danger: rgba(229, 72, 77, 0.14);
-  --bg-badge-warning: rgba(240, 160, 32, 0.18);
-  --bg-badge-success: rgba(47, 166, 92, 0.14);
-  --bg-badge-purple: rgba(139, 92, 246, 0.15);
-  --bg-badge-danger-alt: rgba(229, 72, 77, 0.2);
-  --bg-badge-muted: #FFF7EC;
-  --bg-info-block: rgba(217, 101, 15, 0.06);
+  --bg-nav-end: #FBEFE1;
+  --bg-badge-danger: rgba(206, 97, 97, 0.13);
+  --bg-badge-warning: rgba(217, 162, 74, 0.16);
+  --bg-badge-success: rgba(90, 158, 114, 0.13);
+  --bg-badge-purple: rgba(155, 132, 207, 0.14);
+  --bg-badge-danger-alt: rgba(206, 97, 97, 0.19);
+  --bg-badge-muted: #FDF5EB;
+  --bg-info-block: rgba(185, 115, 71, 0.05);
 
-  /* 边框：暖沙色 */
-  --border-primary: #F0DCC0;
-  --border-light: rgba(217, 101, 15, 0.16);
-  --border-subtle: rgba(240, 220, 192, 0.85);
-  --border-accent: rgba(217, 101, 15, 0.4);
-  --border-danger: rgba(229, 72, 77, 0.3);
-  --border-purple: rgba(139, 92, 246, 0.3);
-  --border-divider: #F7E9D6;
+  /* 边框：柔和砂色 */
+  --border-primary: #EBDCC8;
+  --border-light: rgba(185, 115, 71, 0.14);
+  --border-subtle: rgba(235, 220, 200, 0.85);
+  --border-accent: rgba(185, 115, 71, 0.34);
+  --border-danger: rgba(206, 97, 97, 0.26);
+  --border-purple: rgba(155, 132, 207, 0.26);
+  --border-divider: #F3E8D9;
 
-  /* 强调色：橘橙主色 */
-  --color-primary: #D9650F;
-  --color-primary-glow: rgba(217, 101, 15, 0.45);
-  --color-primary-soft: rgba(217, 101, 15, 0.28);
-  --color-purple: #8B5CF6;
-  --color-danger: #E5484D;
-  --color-warning: #F0A020;
-  --color-success: #2FA65C;
-  --color-canceled: #C4AD95;
-  --color-nav-active-bg: #FFE8C8;
-  --color-nav-active-text: #8A4A12;
-  --color-ws-dot-off: #DCC6AC;
+  /* 强调色：柔和陶土色主调 */
+  --color-primary: #B97347;
+  --color-primary-glow: rgba(185, 115, 71, 0.38);
+  --color-primary-soft: rgba(185, 115, 71, 0.24);
+  --color-purple: #9B84CF;
+  --color-danger: #CE6161;
+  --color-warning: #D9A24A;
+  --color-success: #5A9E72;
+  --color-canceled: #C2AF9C;
+  --color-nav-active-bg: #F9E7D2;
+  --color-nav-active-text: #7A4A22;
+  --color-ws-dot-off: #D6C4B0;
 
-  /* 文字：暖咖啡色系 */
-  --text-primary: #3A2415;
-  --text-secondary: #5C4030;
-  --text-muted: #8A6B54;
-  --text-dim: #B39B87;
-  --text-dark: #A08A78;
-  --text-danger: #C0392B;
-  --text-warning: #A9690A;
-  --text-purple: #6D3FB8;
+  /* 文字：柔和暖棕 */
+  --text-primary: #43301F;
+  --text-secondary: #63483A;
+  --text-muted: #8F7462;
+  --text-dim: #B8A392;
+  --text-dark: #A89180;
+  --text-danger: #B45555;
+  --text-warning: #9A6A1C;
+  --text-purple: #77629F;
   --text-white: #FFFFFF;
 
-  /* 阴影：暖色调，略重 */
-  --shadow-panel: 0 4px 18px rgba(150, 90, 30, 0.1);
+  /* 阴影：更淡的暖调 */
+  --shadow-panel: 0 4px 18px rgba(150, 100, 60, 0.08);
   --shadow-glow: none;
 
   /* 扫描线（浅色主题下隐藏） */
 
-  /* 标题渐变：橘 → 粉 → 天蓝，卡通插画感 */
-  --title-gradient-from: #F0761B;
-  --title-gradient-via: #EC6FA8;
-  --title-gradient-to: #4EA8DE;
+  /* 标题渐变：柔和陶土 → 灰粉 → 雾蓝 */
+  --title-gradient-from: #C58A5E;
+  --title-gradient-via: #D89AAE;
+  --title-gradient-to: #8FB8D0;
 
   /* 面板标题下划线 */
-  --panel-title-border: #F5DFC4;
+  --panel-title-border: #EFE1CE;
 
   /* 后台管理（--bg-admin-page 即全站底色） */
-  --bg-admin-page: #FFF8EE;
+  --bg-admin-page: #FDF8F2;
   --bg-admin-card: #FFFFFF;
-  --bg-admin-input: #FFF7EC;
+  --bg-admin-input: #FDF5EB;
   --bg-admin-input-alt: #FFFFFF;
-  --border-admin-input: #E8CFAE;
-  --border-admin-table: #F0DCC0;
-  --color-admin-focus: #D9650F;
+  --border-admin-input: #E2CEB4;
+  --border-admin-table: #EBDCC8;
+  --color-admin-focus: #B97347;
 
-  /* 图表色板：明快高饱和，与 forest 的沉稳绿形成对比 */
-  --chart-1: #F0761B;
-  --chart-2: #4EA8DE;
-  --chart-3: #EC6FA8;
-  --chart-4: #7BC96F;
-  --chart-5: #A78BFA;
-  --chart-6: #FFC53D;
-  --chart-7: #38BDF8;
-  --chart-8: #FB7185;
-  --chart-9: #34D399;
-  --chart-10: #C084FC;
-  --chart-11: #F59E0B;
-  --chart-12: #60A5FA;
+  /* 图表色板：同一饱和度区间，柔和不刺眼 */
+  --chart-1: #C08457;
+  --chart-2: #7FA8C9;
+  --chart-3: #D79BB0;
+  --chart-4: #8FB58A;
+  --chart-5: #A99BCB;
+  --chart-6: #D9B96E;
+  --chart-7: #8EC0C9;
+  --chart-8: #D08E8E;
+  --chart-9: #7DB89A;
+  --chart-10: #B49BD0;
+  --chart-11: #C9A961;
+  --chart-12: #8FB0D4;
 }
