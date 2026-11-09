@@ -136,9 +136,9 @@ async function handleLogin() {
   display: flex;
   flex-direction: column;
   border-radius: 18px;
-  background: linear-gradient(158deg, rgba(6, 30, 25, 0.26) 0%, rgba(6, 30, 25, 0.10) 100%);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  backdrop-filter: blur(14px) saturate(150%);
+  background: linear-gradient(158deg, rgba(6, 30, 25, 0.18) 0%, rgba(6, 30, 25, 0.06) 100%);
+  -webkit-backdrop-filter: blur(9px) saturate(145%);
+  backdrop-filter: blur(9px) saturate(145%);
   border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.05),
@@ -180,7 +180,7 @@ async function handleLogin() {
 .login-subtitle {
   font-size: 14px;
   color: #ffffff;
-  font-weight: 400;
+  font-weight: 500;
   text-align: center;
   letter-spacing: 1px;
   margin-bottom: 30px;
@@ -201,14 +201,14 @@ async function handleLogin() {
 
 .form-item label {
   font-size: 12.5px;
-  color: rgba(226, 245, 238, 0.72);
+  color: rgba(255, 255, 255, 0.95);
   letter-spacing: 0.3px;
 }
 
 .form-item input {
   padding: 11px 14px;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.38);
   border-radius: 6px;
   color: #ffffff;
   font-size: 14px;
@@ -217,7 +217,7 @@ async function handleLogin() {
 }
 
 .form-item input::placeholder {
-  color: rgba(226, 245, 238, 0.38);
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .form-item input:focus {
@@ -242,7 +242,7 @@ async function handleLogin() {
 .btn-login {
   margin-top: 6px;
   padding: 12px;
-  background: linear-gradient(135deg, #0f6b5b 0%, #27c9b0 100%);
+  background: linear-gradient(135deg, #12a894 0%, #35e3c6 100%);
   color: #ffffff;
   border: none;
   border-radius: 8px;
@@ -250,7 +250,7 @@ async function handleLogin() {
   font-weight: 600;
   letter-spacing: 1px;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(15, 107, 91, 0.4);
+  box-shadow: 0 8px 26px rgba(53, 227, 198, 0.38);
   transition: box-shadow 0.25s, transform 0.15s, filter 0.25s;
 }
 
@@ -261,14 +261,14 @@ async function handleLogin() {
 }
 
 .btn-login:disabled {
-  opacity: 0.75;
+  opacity: 0.85;
   cursor: not-allowed;
 }
 
 .no-register {
   margin-top: 22px;
   font-size: 11.5px;
-  color: rgba(226, 245, 238, 0.42);
+  color: rgba(255, 255, 255, 0.68);
   text-align: center;
 }
 </style>
