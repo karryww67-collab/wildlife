@@ -1,14 +1,14 @@
 /* ============================================================================
- * 主题变量表（全部为薄荷绿系的浅色主题，无深色主题）
+ * 主题变量表（两套浅色主题，色系刻意拉开，切换时观感差异明显）
  *
- *   1) forest  —— 薄荷绿森林（默认）：偏深、偏沉，苔绿/林绿，适合长时间看数据
- *   2) cartoon —— 卡通动物：明亮通透的春绿 + 天空蓝/蜜桃黄点缀，呼应登录页插画
+ *   1) forest  —— 薄荷绿森林（默认）：冷调苔绿/林绿，偏深、偏沉，适合长时间看数据
+ *   2) cartoon —— 卡通动物：暖调奶油底 + 橘橙主色 + 粉/天蓝点缀，呼应登录页插画
  *
  * 约定：
  *   - 两套主题各 69 个变量，名字完全对称 → 改一个主题必须同步改另一个，
  *     否则会静默回落到 :root（forest）的值，出现"半套主题"。
  *   - 品牌识别色 #98FF98 只用于大面积装饰；承担交互（按钮/链接/进度/激活态）
- *     的是各主题的 --color-primary（比品牌绿深两档，保证白字可读）。
+ *     的是各主题的 --color-primary（forest 深绿、cartoon 橘橙，均保证白字可读）。
  *   - 全站页面底色实际来自 --bg-admin-page（8 个视图根容器都用它），
  *     改主题时它比 --bg-primary 更关键。
  * ============================================================================ */
@@ -114,94 +114,94 @@ html * {
   --chart-12: #B76A78;
 }
 
-/* ── 主题 2：卡通动物 ── */
+/* ── 主题 2：卡通动物（暖色系，与 forest 的冷绿形成明显区分） ── */
 [data-theme="cartoon"] {
-  /* 背景 */
-  --bg-primary: #F1FDF7;
+  /* 背景：奶油暖白 */
+  --bg-primary: #FFF8EE;
   --bg-header-start: #FFFFFF;
-  --bg-header-end: #E6FCF0;
+  --bg-header-end: #FFF0DC;
   --bg-panel: rgba(255, 255, 255, 0.9);
   --bg-card: #FFFFFF;
-  --bg-card-hover: #F2FDF7;
-  --bg-card-active: #D6F8E6;
-  --bg-track: #D3EFE1;
+  --bg-card-hover: #FFF7EC;
+  --bg-card-active: #FFE8C8;
+  --bg-track: #F2E0C8;
   --bg-nav-start: #FFFFFF;
-  --bg-nav-end: #E6FCF0;
-  --bg-badge-danger: rgba(255, 107, 107, 0.14);
-  --bg-badge-warning: rgba(255, 178, 60, 0.16);
-  --bg-badge-success: rgba(47, 191, 124, 0.14);
-  --bg-badge-purple: rgba(167, 139, 250, 0.16);
-  --bg-badge-danger-alt: rgba(255, 107, 107, 0.2);
-  --bg-badge-muted: #F2FDF7;
-  --bg-info-block: rgba(47, 191, 124, 0.06);
+  --bg-nav-end: #FFF0DC;
+  --bg-badge-danger: rgba(229, 72, 77, 0.14);
+  --bg-badge-warning: rgba(240, 160, 32, 0.18);
+  --bg-badge-success: rgba(47, 166, 92, 0.14);
+  --bg-badge-purple: rgba(139, 92, 246, 0.15);
+  --bg-badge-danger-alt: rgba(229, 72, 77, 0.2);
+  --bg-badge-muted: #FFF7EC;
+  --bg-info-block: rgba(217, 101, 15, 0.06);
 
-  /* 边框 */
-  --border-primary: #D3EFE1;
-  --border-light: rgba(47, 191, 124, 0.18);
-  --border-subtle: rgba(211, 239, 225, 0.85);
-  --border-accent: rgba(47, 191, 124, 0.42);
-  --border-danger: rgba(255, 107, 107, 0.32);
-  --border-purple: rgba(167, 139, 250, 0.32);
-  --border-divider: #E7F9EF;
+  /* 边框：暖沙色 */
+  --border-primary: #F0DCC0;
+  --border-light: rgba(217, 101, 15, 0.16);
+  --border-subtle: rgba(240, 220, 192, 0.85);
+  --border-accent: rgba(217, 101, 15, 0.4);
+  --border-danger: rgba(229, 72, 77, 0.3);
+  --border-purple: rgba(139, 92, 246, 0.3);
+  --border-divider: #F7E9D6;
 
-  /* 强调色 */
-  --color-primary: #2FBF7C;
-  --color-primary-glow: rgba(47, 191, 124, 0.5);
-  --color-primary-soft: rgba(47, 191, 124, 0.3);
-  --color-purple: #A78BFA;
-  --color-danger: #FF6B6B;
-  --color-warning: #FFB23C;
-  --color-success: #2FBF7C;
-  --color-canceled: #A8C6B8;
-  --color-nav-active-bg: #D6F8E6;
-  --color-nav-active-text: #178A52;
-  --color-ws-dot-off: #C1D5CB;
+  /* 强调色：橘橙主色 */
+  --color-primary: #D9650F;
+  --color-primary-glow: rgba(217, 101, 15, 0.45);
+  --color-primary-soft: rgba(217, 101, 15, 0.28);
+  --color-purple: #8B5CF6;
+  --color-danger: #E5484D;
+  --color-warning: #F0A020;
+  --color-success: #2FA65C;
+  --color-canceled: #C4AD95;
+  --color-nav-active-bg: #FFE8C8;
+  --color-nav-active-text: #8A4A12;
+  --color-ws-dot-off: #DCC6AC;
 
-  /* 文字 */
-  --text-primary: #173D2C;
-  --text-secondary: #3D6B55;
-  --text-muted: #6E9382;
-  --text-dim: #9FBDB0;
-  --text-dark: #8BAF9F;
-  --text-danger: #D64545;
-  --text-warning: #C07C12;
-  --text-purple: #7455C9;
+  /* 文字：暖咖啡色系 */
+  --text-primary: #3A2415;
+  --text-secondary: #5C4030;
+  --text-muted: #8A6B54;
+  --text-dim: #B39B87;
+  --text-dark: #A08A78;
+  --text-danger: #C0392B;
+  --text-warning: #A9690A;
+  --text-purple: #6D3FB8;
   --text-white: #FFFFFF;
 
-  /* 阴影 */
-  --shadow-panel: 0 4px 18px rgba(24, 104, 68, 0.09);
+  /* 阴影：暖色调，略重 */
+  --shadow-panel: 0 4px 18px rgba(150, 90, 30, 0.1);
   --shadow-glow: none;
 
   /* 扫描线（浅色主题下隐藏） */
 
-  /* 标题渐变：绿 → 天空蓝 → 蜜桃黄，做出卡通插画感 */
-  --title-gradient-from: #2FBF7C;
-  --title-gradient-via: #4EC5E8;
-  --title-gradient-to: #FFB23C;
+  /* 标题渐变：橘 → 粉 → 天蓝，卡通插画感 */
+  --title-gradient-from: #F0761B;
+  --title-gradient-via: #EC6FA8;
+  --title-gradient-to: #4EA8DE;
 
   /* 面板标题下划线 */
-  --panel-title-border: #CFF0DF;
+  --panel-title-border: #F5DFC4;
 
   /* 后台管理（--bg-admin-page 即全站底色） */
-  --bg-admin-page: #F1FDF7;
+  --bg-admin-page: #FFF8EE;
   --bg-admin-card: #FFFFFF;
-  --bg-admin-input: #F2FDF7;
+  --bg-admin-input: #FFF7EC;
   --bg-admin-input-alt: #FFFFFF;
-  --border-admin-input: #BCE8D0;
-  --border-admin-table: #D3EFE1;
-  --color-admin-focus: #2FBF7C;
+  --border-admin-input: #E8CFAE;
+  --border-admin-table: #F0DCC0;
+  --color-admin-focus: #D9650F;
 
-  /* 图表色板 */
-  --chart-1: #2FBF7C;
-  --chart-2: #4EC5E8;
-  --chart-3: #FFB23C;
-  --chart-4: #FF7BA9;
+  /* 图表色板：明快高饱和，与 forest 的沉稳绿形成对比 */
+  --chart-1: #F0761B;
+  --chart-2: #4EA8DE;
+  --chart-3: #EC6FA8;
+  --chart-4: #7BC96F;
   --chart-5: #A78BFA;
-  --chart-6: #7BE0AD;
-  --chart-7: #FF9152;
-  --chart-8: #5AB8E8;
-  --chart-9: #C9A227;
-  --chart-10: #E86A9B;
-  --chart-11: #56C596;
-  --chart-12: #9B8BE0;
+  --chart-6: #FFC53D;
+  --chart-7: #38BDF8;
+  --chart-8: #FB7185;
+  --chart-9: #34D399;
+  --chart-10: #C084FC;
+  --chart-11: #F59E0B;
+  --chart-12: #60A5FA;
 }
