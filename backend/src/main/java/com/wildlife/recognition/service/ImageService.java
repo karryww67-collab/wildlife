@@ -131,6 +131,61 @@ public class ImageService {
         if (file.getSize() > MAX_FILE_SIZE) {
             throw new IllegalArgumentException("单张图像不能超过 50MB");
         }
+        // 扩展名可以靠改文件名伪造（实测：2MB 的全零文件改名 .jpg 也能通过上面的检查），
+        // 因此再校验文件头魔数，确保内容真的是图像。
+        if (!hasImageMagic(file)) {
+            throw new IllegalArgumentException("文件内容不是有效的图像（扩展名与实际格式不符）");
+        }
+    }
+
+    /**
+     * 读取文件头并判断是否属于受支持的图像格式。
+     *
+     * <p>只读前 12 字节，对 50MB 的大图也几乎没有开销。
+     */
+    private static boolean hasImageMagic(MultipartFile file) {
+        byte[] head = new byte[12];
+        int len;
+        try (InputStream in = file.getInputStream()) {
+            len = in.readNBytes(head, 0, head.length);
+        } catch (IOException e) {
+            return false;
+        }
+        if (len < 4) {
+            return false;
+        }
+        int b0 = head[0] & 0xFF;
+        int b1 = head[1] & 0xFF;
+        int b2 = head[2] & 0xFF;
+        int b3 = head[3] & 0xFF;
+        // JPEG: FF D8 FF
+        if (b0 == 0xFF && b1 == 0xD8 && b2 == 0xFF) {
+            return true;
+        }
+        // PNG: 89 50 4E 47
+        if (b0 == 0x89 && b1 == 0x50 && b2 == 0x4E && b3 == 0x47) {
+            return true;
+        }
+        // BMP: 42 4D
+        if (b0 == 0x42 && b1 == 0x4D) {
+            return true;
+        }
+        // GIF: 47 49 46 38
+        if (b0 == 0x47 && b1 == 0x49 && b2 == 0x46 && b3 == 0x38) {
+            return true;
+        }
+        // WEBP: RIFF .... WEBP
+        if (len >= 12
+                && b0 == 0x52 && b1 == 0x49 && b2 == 0x46 && b3 == 0x46
+                && (head[8] & 0xFF) == 0x57 && (head[9] & 0xFF) == 0x45
+                && (head[10] & 0xFF) == 0x42 && (head[11] & 0xFF) == 0x50) {
+            return true;
+        }
+        // TIFF: 49 49 2A 00（小端）或 4D 4D 00 2A（大端）
+        if (b0 == 0x49 && b1 == 0x49 && b2 == 0x2A && b3 == 0x00) {
+            return true;
+        }
+        return b0 == 0x4D && b1 == 0x4D && b2 == 0x00 && b3 == 0x2A;
     }
 
     private Path store(MultipartFile file, String extension) throws IOException {
