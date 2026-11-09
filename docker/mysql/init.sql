@@ -348,6 +348,15 @@ VALUES
     '/models/wildlife-v1.0/best.pt',
         '["野猪", "猕猴", "麂", "水鹿", "鼬獾", "红颊松鼠", "果子狸", "蟹獴", "中华鬣羚", "白鹇", "黄喉貂", "帚尾豪猪", "灰孔雀雉", "红原鸡", "虎", "豹", "豹猫", "猪獾", "赤麂"]',
     'ENABLED'
+),
+-- 第二个版本：COCO 80 类基线（未针对本项目 19 类微调），默认停用。
+-- 用途：演示 model_version 的多版本管理；启用后识别结果会出现 COCO 类别名。
+(
+    'coco-yolo11n',
+    'coco-yolo11n',
+    '/models/coco-yolo11n/best.pt',
+    '["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]',
+    'DISABLED'
 )
 ON DUPLICATE KEY UPDATE
     model_name = model_name;
