@@ -29,7 +29,8 @@
         :title="`当前主题：${themeMeta.label} · 点击切换到「${nextThemeMeta.label}」`"
         @click="toggleTheme"
       >
-        {{ themeMeta.icon }}
+        <span class="theme-icon">{{ themeMeta.icon }}</span>
+        <span class="theme-label">{{ themeMeta.label }}</span>
       </button>
 
       <span v-if="username" class="nav-user">
@@ -240,11 +241,10 @@ onMounted(loadSession)
 .theme-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 30px;
+  gap: 6px;
   height: 30px;
-  padding: 0;
-  font-size: 15px;
+  padding: 0 10px;
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
   border-radius: 6px;
@@ -252,6 +252,15 @@ onMounted(loadSession)
   border: 1px solid var(--border-primary);
   color: var(--text-secondary);
   transition: background 0.2s, border-color 0.2s;
+}
+
+.theme-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.theme-label {
+  white-space: nowrap;
 }
 
 .theme-btn:hover {
