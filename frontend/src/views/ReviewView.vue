@@ -10,7 +10,7 @@
       </div>
       <div class="head-actions">
         <button class="btn-ghost" :disabled="loading" @click="reloadAll">刷新</button>
-        <button class="btn-primary" :disabled="!pendingRows.length" @click="startWorkflow">
+        <button class="btn-primary" :disabled="!canSubmitReview || !pendingRows.length" @click="startWorkflow">
           开始复核本页
         </button>
       </div>
@@ -129,7 +129,7 @@
               <span>全选本页可复核项</span>
             </label>
             <div class="bulk-actions">
-              <button class="btn-mini primary" :disabled="!selectedIds.length" @click="openBatch">
+              <button class="btn-mini primary" :disabled="!canSubmitReview || !selectedIds.length" @click="openBatch">
                 批量复核所选{{ selectedIds.length ? ` (${selectedIds.length})` : '' }}
               </button>
               <button class="btn-mini" :disabled="!selectedIds.length" @click="selectedIds = []">清空</button>
@@ -158,7 +158,7 @@
                   <input
                     type="checkbox"
                     :checked="selectedIds.includes(row.id)"
-                    :disabled="row.imageAvailable === false"
+                    :disabled="!canSubmitReview || row.imageAvailable === false"
                     :title="row.imageAvailable === false ? '原图已丢失，无法复核' : ''"
                     @change="toggleRow(row.id)"
                   />
@@ -186,7 +186,7 @@
                 <td class="ops">
                   <button
                     class="btn-mini primary"
-                    :disabled="row.imageAvailable === false"
+                    :disabled="!canSubmitReview || row.imageAvailable === false"
                     :title="row.imageAvailable === false ? '原图已丢失，无法核对' : '复核该结果'"
                     @click.stop="openSingle(row)"
                   >复核</button>
@@ -301,6 +301,7 @@ import {
   getReviewStats,
   listPendingReviews,
   listTasks,
+  verifyToken,
   type DetectionBox,
   type DetectionResult,
   type RecognitionImage,
@@ -309,6 +310,14 @@ import {
   type ReviewStats
 } from '@/api/index'
 import { loadProtectedImage, revokeImageUrl } from '@/utils/imageUrl'
+
+/**
+ * 是否可提交复核结论。
+ * 与后端 AuthInterceptor.isReviewWrite() 对应：只有 ADMIN 与 REVIEWER 能提交，
+ * USER 只读（按钮禁用，避免点了才吃 403）。
+ * 默认 true 以免加载瞬间按钮闪一下不可用，取回角色后再校正。
+ */
+const canSubmitReview = ref(true)
 
 /**
  * 置信度分级阈值 —— 复核场景的判读口径，集中在此处，避免同一个数字散落在模板与函数里。
@@ -668,7 +677,17 @@ function reloadAll() {
   loadPending()
 }
 
-onMounted(reloadAll)
+onMounted(async () => {
+  // 先取回角色，决定复核动作是否可用；取不到就按只读处理
+  try {
+    const session = await verifyToken()
+    const r = String(session.data.role).toUpperCase()
+    canSubmitReview.value = r === 'ADMIN' || r === 'REVIEWER'
+  } catch {
+    canSubmitReview.value = false
+  }
+  await reloadAll()
+})
 
 onBeforeUnmount(releaseRaw)
 </script>

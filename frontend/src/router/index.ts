@@ -3,10 +3,12 @@ import type { RouteRecordRaw } from 'vue-router'
 import { getToken, verifyToken } from '@/api'
 
 /**
- * 角色取值：后端 AuthService.normalizeRole() 只归一为两种，
- * 库里除 ADMIN 外的任何角色（含 REVIEWER）都会被降为 USER。
+ * 角色取值：与后端 AuthService.normalizeRole() 一致，共三级。
+ *   ADMIN    全部权限（含模型/用户管理）
+ *   REVIEWER 只读 + 可提交人工复核结论
+ *   USER     只读
  */
-type Role = 'ADMIN' | 'USER'
+type Role = 'ADMIN' | 'REVIEWER' | 'USER'
 
 /** 越权访问时的回退页，也是普通用户的首页。 */
 const FALLBACK_PATH = '/dashboard'
@@ -95,7 +97,10 @@ const router = createRouter({
 })
 
 function normalizeRole(role?: string): Role {
-  return role?.trim().toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER'
+  const v = role?.trim().toUpperCase()
+  if (v === 'ADMIN') return 'ADMIN'
+  if (v === 'REVIEWER') return 'REVIEWER'
+  return 'USER'
 }
 
 router.beforeEach(async (to) => {

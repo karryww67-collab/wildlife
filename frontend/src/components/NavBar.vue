@@ -59,7 +59,13 @@ const { themeMeta, nextThemeMeta, toggleTheme } = useTheme()
 const username = ref('')
 const role = ref('')
 
-const roleText = computed(() => (role.value === 'ADMIN' ? '管理员' : '普通用户'))
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: '管理员',
+  REVIEWER: '复核员',
+  USER: '普通用户'
+}
+
+const roleText = computed(() => ROLE_LABEL[role.value] ?? '普通用户')
 
 /** 菜单顺序即导航顺序，标签与 router 的 meta.title 保持一致。 */
 const MENU = [

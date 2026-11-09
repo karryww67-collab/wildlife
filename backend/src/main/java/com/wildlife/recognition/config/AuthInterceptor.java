@@ -38,7 +38,23 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
 
+        if (isReviewWrite(method, path) && !session.canReview()) {
+            writeJson(response, HttpServletResponse.SC_FORBIDDEN, "需要管理员或复核员权限");
+            return false;
+        }
+
         return true;
+    }
+
+    /**
+     * 复核提交类端点：仅 ADMIN 与 REVIEWER 可用。
+     *
+     * <p>只拦截 {@code POST /api/reviews/**}（提交单条 / 批量提交复核结论）。
+     * 读取类端点（{@code /pending}、{@code /records}、{@code /stats}）对只读用户开放，
+     * 否则普通用户进「人工复核」页会直接白屏。
+     */
+    private static boolean isReviewWrite(String method, String path) {
+        return "POST".equalsIgnoreCase(method) && path.startsWith("/api/reviews");
     }
 
     /**
@@ -62,10 +78,10 @@ public class AuthInterceptor implements HandlerInterceptor {
      *       属于展示层约定，不当作数据边界。</li>
      * </ul>
      *
-     * <p>注意：{@code AuthService.normalizeRole()} 只归一出 ADMIN 与 USER 两种角色，
-     * 库里的 REVIEWER 会被降为 USER，所以这里也只区分「是否管理员」。
-     * 若日后要让 REVIEWER 真正生效（如仅其可提交复核结论），需先改归一化逻辑，
-     * 再在 {@code preHandle} 里加一层比 isAdmin() 更细的判定。
+     * <p>角色口径（2026-11 起三级生效）：{@code ADMIN} 全部权限；
+     * {@code REVIEWER} 在只读基础上**额外**可提交复核结论（见 {@link #isReviewWrite}），
+     * 但进不了模型/用户管理；{@code USER} 只读。
+     * 归一化逻辑见 {@code AuthService.normalizeRole()}，已保留 REVIEWER。
      */
     private static boolean isAdminOnly(String method, String path) {
         if (path.startsWith("/api/models")) {

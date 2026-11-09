@@ -19,6 +19,7 @@ public class AuthService {
     private static final String TOKEN_PREFIX = "auth:token:";
     private static final long TOKEN_EXPIRE_HOURS = 8;
     private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_REVIEWER = "REVIEWER";
     private static final String ROLE_USER = "USER";
 
     private final UserRepository userRepository;
@@ -89,14 +90,37 @@ public class AuthService {
         if ("ADMIN".equalsIgnoreCase(value) || "管理员".equals(value)) {
             return ROLE_ADMIN;
         }
+        if (ROLE_REVIEWER.equalsIgnoreCase(value) || "复核员".equals(value)) {
+            return ROLE_REVIEWER;
+        }
         return ROLE_USER;
     }
 
     public record LoginResult(String token, String username, String role) {}
 
+    /**
+     * 登录会话。
+     *
+     * <p>三级角色：
+     * <ul>
+     *   <li>{@code ADMIN} —— 全部权限，含模型版本管理与用户管理；</li>
+     *   <li>{@code REVIEWER} —— 可提交人工复核结论（{@link #canReview()}），
+     *       但不能进模型/用户管理；</li>
+     *   <li>{@code USER} —— 只读，复核仅可查看不能提交。</li>
+     * </ul>
+     */
     public record Session(String username, String role) {
         public boolean isAdmin() {
             return ROLE_ADMIN.equalsIgnoreCase(role);
+        }
+
+        public boolean isReviewer() {
+            return ROLE_REVIEWER.equalsIgnoreCase(role);
+        }
+
+        /** 是否可提交复核结论：管理员与复核员可以，只读用户不可以。 */
+        public boolean canReview() {
+            return isAdmin() || isReviewer();
         }
     }
 }

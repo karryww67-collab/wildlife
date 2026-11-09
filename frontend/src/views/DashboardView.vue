@@ -287,7 +287,7 @@ const trendList = ref<Array<{ time: string; value: number }>>([])
 const tasks = ref<RecognitionTask[]>([])
 const taskTotal = ref(0)
 const activeModel = ref<ModelVersion | null>(null)
-const role = ref<'ADMIN' | 'USER'>('USER')
+const role = ref<'ADMIN' | 'REVIEWER' | 'USER'>('USER')
 
 /** 概览卡：字段与后端 /api/statistics/overview 一一对应。 */
 const overviewCards = computed(() => {
@@ -395,7 +395,8 @@ onMounted(async () => {
   // 角色只决定快捷入口显示哪些，取不到就按普通用户处理
   try {
     const session = await verifyToken()
-    role.value = String(session.data.role).toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER'
+    const r = String(session.data.role).toUpperCase()
+    role.value = r === 'ADMIN' ? 'ADMIN' : r === 'REVIEWER' ? 'REVIEWER' : 'USER'
   } catch {
     role.value = 'USER'
   }
